@@ -11,37 +11,33 @@ module Encoding.SplitST where
 private
   variable
     u : Univ
-    s : Shape
-    ctxshape : S⟦ ctx ⟧
-    typeshape : S⟦ type ⟧
-    sessionshape : S⟦ session ⟧
-    Γ Δ Ξ Ω Θ : T⟦ ctxshape ⟧
-    x y : T⟦ typeshape ⟧
+    Γ Δ Ξ Ω Θ : T⟦ ctx ⟧
+    x y : T⟦ type ⟧
 
-data _≔_+_ : ∀ {u} {s : S⟦ u ⟧} → T⟦ s ⟧ → T⟦ s ⟧ → T⟦ s ⟧ → Set₁ where
-  left : {s : S⟦ session ⟧} {t : T⟦ s ⟧} → _≔_+_ {session} t t end
-  right : {s : S⟦ session ⟧} {t : T⟦ s ⟧} → _≔_+_ {session} t end t
-  pure : {t : T⟦_⟧ {type} pure} → t ≔ t + t
+data _≔_+_ : ∀ {u} → T⟦ u ⟧ → T⟦ u ⟧ → T⟦ u ⟧ → Set₁ where
+  left : {t : T⟦ session ⟧} → _≔_+_ {session} t t end
+  right : {t : T⟦ session ⟧} → _≔_+_ {session} t end t
+  pure : {A : Set} {a : A} → _≔_+_ (pure A , a) (pure A , a) (pure A , a)
   chan : ∀ {xₗ xᵣ yₗ yᵣ zₗ zᵣ}
        → _≔_+_ {session} xₗ yₗ zₗ
        → _≔_+_ {session} xᵣ yᵣ zᵣ
        → _≔_+_ {type} (chan (xₗ , xᵣ) , tt) (chan (yₗ , yᵣ) , tt) (chan (zₗ , zᵣ) , tt)
   [] : _≔_+_ {ctx} [] [] []
-  _∷_ : ∀ {s : S⟦ type ⟧} {x y z : T⟦ s ⟧} {ss : S⟦ ctx ⟧} {xs ys zs : T⟦ ss ⟧}
+  _∷_ : ∀ {x y z : T⟦ type ⟧} {xs ys zs : T⟦ ctx ⟧}
       → _≔_+_ {type} x y z
       → _≔_+_ {ctx} xs ys zs
       → _≔_+_ {ctx} (x ∷ xs) (y ∷ ys) (z ∷ zs)
 
 
 infix 3 _∋_▹_
-data _∋_▹_ : ∀ {u} {s : S⟦ u ⟧} → T⟦ s ⟧ → Event u → T⟦ s ⟧ → Set₁ where
-  receive : ∀ {s t f}
-          → (session ¿ t f) ∋ (receive s t) ▹ (pair t f)
-  send    : ∀ {s t f}
-          → (session ! t f) ∋ (send s t) ▹ (pair t f)
-  resume  : ∀ {s} {t : Type s} {f v}
+data _∋_▹_ : ∀ {u} → T⟦ u ⟧ → Event u → T⟦ u ⟧ → Set₁ where
+  receive : ∀ {t f}
+          → (session ¿ t f) ∋ (receive t) ▹ (pair t f)
+  send    : ∀ {t f}
+          → (session ! t f) ∋ (send t) ▹ (pair t f)
+  resume  : ∀ {t : Type} {f v}
           → (pair t f) ∋ (resume t v) ▹ (f v)
-  erase   : ∀ {s} {t : Type s} {v}
+  erase   : ∀ {t : Type} {v}
           → (t , v) ∋ (erase t v) ▹ (0∙ t , 0∙⟦ t ⟧ v)
   chan⁺   : ∀ {x y z e}
           → x ∋ e ▹ y
@@ -49,23 +45,26 @@ data _∋_▹_ : ∀ {u} {s : S⟦ u ⟧} → T⟦ s ⟧ → Event u → T⟦ s 
   chan⁻   : ∀ {x y z e}
           → x ∋ e ▹ y
           → (chan (z , x) , tt) ∋ (channel ⁻ e) ▹ (chan (z , y) , tt)
-  zero    : ∀ {e} {x y : T⟦ typeshape ⟧}
+  zero    : ∀ {e} {x y : T⟦ type ⟧}
           → x ∋ e ▹ y
           → x ∷ Γ ∋ var zero e ▹ y ∷ Γ
-  suc     : ∀ {Γ Δ : T⟦ ctxshape ⟧} {t : T⟦ typeshape ⟧} {e n}
+  suc     : ∀ {Γ Δ : T⟦ ctx ⟧} {t : T⟦ type ⟧} {e n}
           → Γ ∋ var n e ▹ Δ
           → t ∷ Γ ∋ var (suc n) e ▹ t ∷ Δ
 
 
 mutual
-  data Branch (t : Type s) (v : ⟦ t ⟧) (n : ℕ) (p : Polarity) : ∀ {s : S⟦ ctx ⟧} → T⟦ s ⟧ → Set₁ where
-    case_∶_ : Γ ∋ var n (channel p (resume t v)) ▹ Δ
-            → Proc ((t , v) ∷ Δ)
-            → Branch t v n p Δ
+  record Branch (t : Type) (v : ⟦ t ⟧) (n : ℕ) (p : Polarity) (Δ : T⟦ ctx ⟧) : Set₁ where
+    inductive
+    constructor case_∶_
+    field
+      {Ψ} : T⟦ ctx ⟧
+      resume-var : Δ ∋ var n (channel p (resume t v)) ▹ Ψ
+      cont : Proc ((t , v) ∷ Ψ)
 
 
   infix 3 Proc
-  data Proc : {s : S⟦ ctx ⟧} → T⟦ s ⟧ → Set₁ where
+  data Proc : T⟦ ctx ⟧ → Set₁ where
 
     pure : (t : Set) (v : t)
          → let x = (pure t , v)
@@ -80,22 +79,22 @@ mutual
           Proc ((ch , tt) ∷ Γ)
         → Proc Γ
 
-    par : {Γ Δ Ξ : T⟦ ctxshape ⟧}
+    par : {Γ Δ Ξ : T⟦ ctx ⟧}
         → _≔_+_ {ctx} Γ Δ Ξ
         → Proc Δ
         → Proc Ξ
         → Proc Γ
 
-    send : ∀ {s t p n m}
-        → Γ ∋ var n (channel p (send s t)) ▹ Δ
+    send : ∀ {t p n m}
+        → Γ ∋ var n (channel p (send t)) ▹ Δ
         → (v : ⟦ t ⟧)
         → Δ ∋ var m (erase t v) ▹ Ξ
         → Ξ ∋ var n (channel p (resume t v)) ▹ Ω
         → Proc Ω
         → Proc Γ
 
-    recv : ∀ {s t p n} {Δ : T⟦ ctxshape ⟧}
-        → Γ ∋ var n (channel p (receive s t)) ▹ Δ
+    recv : ∀ {t p n} {Δ : T⟦ ctx ⟧}
+        → Γ ∋ var n (channel p (receive t)) ▹ Δ
         → ((v : ⟦ t ⟧) → Branch t v n p Δ)
         → Proc Γ
 
