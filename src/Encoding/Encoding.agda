@@ -72,18 +72,7 @@ mutual
   ⟦_⟧ₚ : ∀ {Γ} → S.Process Γ → L.Process ⟦ Γ ⟧ₑ-ctx
   ⟦ S.end n ⟧ₚ = L.end ⟦ n ⟧-null
   ⟦ S.par s p q ⟧ₚ = L.par ⟦ s ⟧-≔-+ ⟦ p ⟧ₚ ⟦ q ⟧ₚ
-  ⟦ S.new S.end p ⟧ₚ
-    = L.new L.0∙ L.0∙ (L.pure ⊤)
-    $ L.new L.0∙ L.0∙ (L.pure ⊤)
-    $ ⟦ p ⟧ₚ
-  ⟦ S.new (S.recv T C) p ⟧ₚ
-    = L.new L.0∙ L.1∙ (L.prod ⟦ T ⟧ₑ-type (⟦_⟧ₑ-session ∘ S.dual ∘ C ∘ decode T))
-    $ L.new L.1∙ L.0∙ (L.prod ⟦ T ⟧ₑ-type (⟦_⟧ₑ-session  ∘ C ∘ decode T))
-    $ ⟦ p ⟧ₚ
-  ⟦ S.new (S.send T C) p ⟧ₚ
-    = L.new L.1∙ L.0∙ (L.prod ⟦ T ⟧ₑ-type (⟦_⟧ₑ-session ∘ S.dual ∘ C ∘ decode T))
-    $ L.new L.0∙ L.1∙ (L.prod ⟦ T ⟧ₑ-type (⟦_⟧ₑ-session  ∘ C ∘ decode T))
-    $ ⟦ p ⟧ₚ
+  ⟦ S.new S p ⟧ₚ = create S ⟦ p ⟧ₚ
   ⟦ S.rep n p ⟧ₚ = L.rep ⟦ n ⟧-null ⟦ p ⟧ₚ
   ⟦ S.send {T = T} {t = t} {C = C} v c p ⟧ₚ
     with Δ , spv , tv ← ∋ₜ-exhaust v
