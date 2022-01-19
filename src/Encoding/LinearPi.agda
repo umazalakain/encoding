@@ -1,4 +1,4 @@
-open import Function using (_∘_)
+open import Function using (_∘_; _$_)
 open import Data.Unit using (⊤; tt)
 open import Data.List.Base using (List; []; _∷_)
 open import Data.Product using (Σ; Σ-syntax; _×_; _,_; proj₁; proj₂)
@@ -39,6 +39,7 @@ data Univ : Set where
 ⟦ ctx ⟧ᵤ = Ctx
 
 
+infixr 5 _∷_
 
 data _≔_+_ : ∀ {u} → ⟦ u ⟧ᵤ → ⟦ u ⟧ᵤ → ⟦ u ⟧ᵤ → Set where
   -- linear
@@ -134,8 +135,8 @@ data Process : Ctx → Set₁ where
       → Process ys
       → Process zs
       → Process xs
-  new : ∀ {xs} m t
-      → Process ((chan m m t , tt) ∷ xs)
+  new : ∀ {xs} i o t
+      → Process ((chan i o t , tt) ∷ xs)
       → Process xs
   rep : ∀ {xs}
       → Null xs
@@ -143,9 +144,9 @@ data Process : Ctx → Set₁ where
       → Process xs
   send : ∀ {xs ys zs vs ws T t}
        → xs ≔ ys + zs
+       → Term ys (T , t)
        → zs ≔ vs + ws
-       → Term ys (chan 0∙ 1∙ T , tt)
-       → Term vs (T , t)
+       → Term vs (chan 0∙ 1∙ T , tt)
        → Process ws
        → Process xs
   recv : ∀ {xs ys zs T}
@@ -242,10 +243,25 @@ replrecv {_} {ys} sp null (suc n) t term =
 
 _ : Process ((chan 1∙ 1∙ (prod (pure ℕ) (repl (pure ⊤))) , tt) ∷ [])
 _ = par (chan 1∙-left 1∙-right ∷ [])
-  (recv (chan 1∙-left 0∙ ∷ []) (var (here [] (chan 1∙ 0∙))) λ (n , c) → replrecv (prod-left ∷ chan 0∙ 0∙ ∷ []) (pure ∷ (chan 0∙ 0∙ ∷ [])) n c (var (here (chan 0∙ 0∙ ∷ []) prod)))
-  (new 1∙ (prod (pure ⊤) (λ _ → pure ⊤))
-    (send (chan 1∙-right 1∙-right ∷ chan 0∙ 1∙-left ∷ []) (chan 1∙-left 1∙-right ∷ (chan 0∙ 0∙ ∷ []))
-      (var (there (chan 0∙ 0∙ ) (here [] (chan 0∙ 1∙))))
+  (recv
+    (chan 1∙-left 0∙ ∷ [])
+    (var (here [] (chan 1∙ 0∙)))
+    λ (n , c) → replrecv
+      (prod-left ∷ chan 0∙ 0∙ ∷ [])
+      (pure ∷ (chan 0∙ 0∙ ∷ []))
+      n
+      c
+      (var (here (chan 0∙ 0∙ ∷ []) prod)))
+  (new 1∙ 1∙ (prod (pure ⊤) (λ _ → pure ⊤)) $
+    send
+      (chan 1∙-left 1∙-right ∷ chan 0∙ 1∙-right ∷ [])
       (pair (chan 1∙-right 0∙ ∷ chan 0∙ 0∙ ∷ []) (pure 1 (chan 0∙ 0∙ ∷ (chan 0∙ 0∙ ∷ []))) (var (here (chan 0∙ 0∙ ∷ []) (chan 1∙ 0∙))))
-      (send (chan 0∙ 1∙-left ∷ (chan 0∙ 0∙ ∷ [])) (chan 0∙ 0∙ ∷ (chan 0∙ 0∙ ∷ [])) (var (here (chan 0∙ 0∙ ∷ []) (chan 0∙ 1∙))) (pair (chan 0∙ 0∙ ∷ (chan 0∙ 0∙ ∷ [])) (pure tt (chan 0∙ 0∙ ∷ (chan 0∙ 0∙ ∷ []))) (pure tt (chan 0∙ 0∙ ∷ (chan 0∙ 0∙ ∷ [])))) (end (chan 0∙ 0∙ ∷ (chan 0∙ 0∙ ∷ []))))))
+      (chan 0∙ 1∙-right ∷ (chan 0∙ 1∙-left ∷ []))
+      (var (there (chan 0∙ 0∙ ) (here [] (chan 0∙ 1∙)))) $
+      send
+        (chan 0∙ 1∙-right ∷ chan 0∙ 0∙ ∷ [])
+        (pair (chan 0∙ 0∙ ∷ (chan 0∙ 0∙ ∷ [])) (pure tt (chan 0∙ 0∙ ∷ (chan 0∙ 0∙ ∷ []))) (pure tt (chan 0∙ 0∙ ∷ (chan 0∙ 0∙ ∷ []))))
+        (chan 0∙ 1∙-left ∷ (chan 0∙ 0∙ ∷ []))
+        (var (here (chan 0∙ 0∙ ∷ []) (chan 0∙ 1∙)))
+        (end (chan 0∙ 0∙ ∷ (chan 0∙ 0∙ ∷ []))))
 

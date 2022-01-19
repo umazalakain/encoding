@@ -1,3 +1,4 @@
+open import Function using (_∘_)
 open import Data.Unit using (⊤; tt)
 open import Data.List.Base using (List; []; _∷_)
 open import Data.Product using (Σ; Σ-syntax; _×_; _,_)
@@ -16,24 +17,10 @@ mutual
   ⟦ pure A ⟧ₜ = A
   ⟦ chan _ ⟧ₜ = ⊤
 
-data DualSession : Session → Session → Set₁ where
-  sendrecv : ∀ {T} {S R : ⟦ T ⟧ₜ → Session}
-            → ((t : ⟦ T ⟧ₜ) → DualSession (S t) (R t))
-            → DualSession (send T S) (recv T R)
-  recvsend : ∀ {T} {S R : ⟦ T ⟧ₜ → Session}
-            → ((t : ⟦ T ⟧ₜ) → DualSession (S t) (R t))
-            → DualSession (recv T S) (send T R)
-
-
-data Prefix (S : Session) : Session → Set₁ where
-  end : Prefix S S
-  send : ∀ {T C} → ((t : ⟦ T ⟧ₜ) → Prefix S (C t)) → Prefix S (send T C)
-  recv : ∀ {T C} → ((t : ⟦ T ⟧ₜ) → Prefix S (C t)) → Prefix S (recv T C)
-
-
-data BalancedSession : Session → Session → Set₁ where
-  left : ∀ {S pS Ŝ} → Prefix S pS → DualSession S Ŝ → BalancedSession pS Ŝ
-  right : ∀ {S pS Ŝ} → Prefix S pS → DualSession S Ŝ → BalancedSession Ŝ pS
+dual : Session → Session
+dual end = end
+dual (recv T C) = send T (dual ∘ C)
+dual (send T C) = recv T (dual ∘ C)
 
 
 TypedValue : Set₁
@@ -78,20 +65,42 @@ data Null : ∀ {u} → ⟦ u ⟧ᵤ → Set₁ where
 
 
 data Action : Set₁ where
-  exhaust : Action
-  recv : TypedValue → Action
-  send : TypedValue → Action
+  exhaust : TypedValue → Action
+  recv : (T : Type) (t : ⟦ T ⟧ₜ) (C : ⟦ T ⟧ₜ → Session) → Action
+  send : (T : Type) (t : ⟦ T ⟧ₜ) (C : ⟦ T ⟧ₜ → Session) → Action
 
 
 data _∋ₜ_▹_ : ∀ {u} → ⟦ u ⟧ᵤ → Action → ⟦ u ⟧ᵤ → Set₁ where
-  recv : ∀ {T} {S : ⟦ T ⟧ₜ → Session} {t} → (recv T S) ∋ₜ (recv (T , t)) ▹ (S t)
-  send : ∀ {T} {S : ⟦ T ⟧ₜ → Session} {t} → (send T S) ∋ₜ (send (T , t)) ▹ (S t)
+  recv : ∀ {T} {S : ⟦ T ⟧ₜ → Session} {t} → (recv T S) ∋ₜ recv T t S ▹ (S t)
+  send : ∀ {T} {S : ⟦ T ⟧ₜ → Session} {t} → (send T S) ∋ₜ send T t S ▹ (S t)
   chan : ∀ {x α x'} → x ∋ₜ α ▹ x' → (chan x , tt) ∋ₜ α ▹ (chan x' , tt)
-  exhaust-pure : ∀ {A a} → (pure A , a) ∋ₜ exhaust ▹ (pure A , a)
-  exhaust-chan : ∀ {x} → (chan x , tt) ∋ₜ exhaust ▹ (pure ⊤ , tt)
+  exhaust-pure : ∀ {A a} → (pure A , a) ∋ₜ exhaust (pure A , a) ▹ (pure A , a)
+  exhaust-chan : ∀ {x} → (chan x , tt) ∋ₜ exhaust (chan x , tt) ▹ (pure ⊤ , tt)
   here : ∀ {x xs α x'}
        → _∋ₜ_▹_ {type} x α x'
        → _∋ₜ_▹_ {ctx} (x ∷ xs) α (x' ∷ xs)
   there : ∀ {x' xs xs' α}
         → _∋ₜ_▹_ {ctx} xs α xs'
         → _∋ₜ_▹_ {ctx} (x' ∷ xs) α (x' ∷ xs')
+
+
+data Process : Ctx → Set₁ where
+  end : ∀ {xs} → Null xs → Process xs
+  par : ∀ {xs ys zs}
+      → xs ≔ ys + zs
+      → Process ys
+      → Process zs
+      → Process xs
+  new : ∀ {xs} S
+      → Process ((chan S , tt) ∷ (chan (dual S) , tt) ∷ xs)
+      → Process xs
+  rep : ∀ {xs} → Null xs → Process xs → Process xs
+  send : ∀ {xs ys zs T t C}
+       → xs ∋ₜ exhaust (T , t) ▹ ys
+       → ys ∋ₜ send T t C ▹ zs
+       → Process zs
+       → Process xs
+  recv : ∀ {xs ys T C}
+       → ((t : ⟦ T ⟧ₜ) → xs ∋ₜ recv T t C ▹ ys × Process ((T , t) ∷ ys))
+       → Process xs
+
