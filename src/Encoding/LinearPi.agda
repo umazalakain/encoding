@@ -1,6 +1,7 @@
 open import Function using (_∘_; _$_)
 open import Data.Unit using (⊤; tt)
 open import Data.List.Base using (List; []; _∷_)
+open import Data.Nat.Base using (ℕ; zero; suc)
 open import Data.Product using (Σ; Σ-syntax; _×_; _,_; proj₁; proj₂)
 
 module LinearPi where
@@ -160,7 +161,13 @@ data Process : Ctx → Set₁ where
           → Process ((A , a) ∷ (B a , b) ∷ zs)
           → Process xs
 
-open import Data.Nat.Base using (ℕ; zero; suc)
+
+data _[_↦_]≔_ {a} {A : Set a} : List A → ℕ → A → List A → Set where
+  here : ∀ {x xs t} → (x ∷ xs) [ zero ↦ t ]≔ (t ∷ xs)
+  there : ∀ {xs i t ys x}
+        → xs [ i ↦ t ]≔ ys
+        → (x ∷ xs) [ suc i ↦ t ]≔ (x ∷ ys)
+
 repl : Type → ℕ → Type
 repl A zero = pure ⊤
 repl A (suc n) = chan 1∙ 0∙ (prod A λ _ → repl A n)
@@ -195,6 +202,16 @@ repl A (suc n) = chan 1∙ 0∙ (prod A λ _ → repl A n)
 
 +-idʳ : ∀ {u} (x : ⟦ u ⟧ᵤ) → Σ[ n ∈ ⟦ u ⟧ᵤ ] x ≔ x + n × Null n
 +-idʳ x = let a , b , c = +-idˡ x in a , +-comm b , c
+
+⊆-refl : ∀ {u} (x : ⟦ u ⟧ᵤ) → x ⊆ x
+⊆-refl {usage} 0∙ = 0∙
+⊆-refl {usage} 1∙ = 1∙
+⊆-refl {usage} ω∙ = ω∙
+⊆-refl {type} (pure x , w) = pure
+⊆-refl {type} (prod x y , w) = prod
+⊆-refl {type} (chan i o t , w) = chan (⊆-refl i) (⊆-refl o)
+⊆-refl {ctx} [] = []
+⊆-refl {ctx} (x ∷ xs) = ⊆-refl x ∷ ⊆-refl xs
 
 ⊆-repl : ∀ {A} n {t} → (repl A n , t) ⊆ (repl A n , t)
 ⊆-repl zero = pure

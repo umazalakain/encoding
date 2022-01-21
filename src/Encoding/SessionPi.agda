@@ -1,6 +1,7 @@
 open import Function using (_∘_)
 open import Data.Unit using (⊤; tt)
 open import Data.List.Base using (List; []; _∷_)
+open import Data.Nat.Base using (ℕ; zero; suc)
 open import Data.Product using (Σ; Σ-syntax; _×_; _,_)
 
 mutual
@@ -39,7 +40,6 @@ data Univ : Set where
 ⟦ type ⟧ᵤ = TypedValue
 ⟦ ctx ⟧ᵤ = Ctx
 
-
 data _≔_+_ : ∀ {u} → ⟦ u ⟧ᵤ → ⟦ u ⟧ᵤ → ⟦ u ⟧ᵤ → Set where
   left : {S : Session} → S ≔ S + end
   right : {S : Session} → S ≔ end + S
@@ -65,6 +65,7 @@ data Null : ∀ {u} → ⟦ u ⟧ᵤ → Set₁ where
 
 
 data Action : Set₁ where
+  at : ℕ → Action → Action
   exhaust : TypedValue → Action
   recv : (T : Type) (t : ⟦ T ⟧ₜ) (C : ⟦ T ⟧ₜ → Session) → Action
   send : (T : Type) (t : ⟦ T ⟧ₜ) (C : ⟦ T ⟧ₜ → Session) → Action
@@ -78,10 +79,10 @@ data _∋ₜ_▹_ : ∀ {u} → ⟦ u ⟧ᵤ → Action → ⟦ u ⟧ᵤ → Set
   exhaust-chan : ∀ {x} → (chan x , tt) ∋ₜ exhaust (chan x , tt) ▹ (pure ⊤ , tt)
   here : ∀ {x xs α x'}
        → _∋ₜ_▹_ {type} x α x'
-       → _∋ₜ_▹_ {ctx} (x ∷ xs) α (x' ∷ xs)
-  there : ∀ {x' xs xs' α}
-        → _∋ₜ_▹_ {ctx} xs α xs'
-        → _∋ₜ_▹_ {ctx} (x' ∷ xs) α (x' ∷ xs')
+       → _∋ₜ_▹_ {ctx} (x ∷ xs) (at zero α) (x' ∷ xs)
+  there : ∀ {x' xs xs' n α}
+        → _∋ₜ_▹_ {ctx} xs (at n α) xs'
+        → _∋ₜ_▹_ {ctx} (x' ∷ xs) (at (suc n) α) (x' ∷ xs')
 
 
 data Process : Ctx → Set₁ where
@@ -95,12 +96,12 @@ data Process : Ctx → Set₁ where
       → Process ((chan S , tt) ∷ (chan (dual S) , tt) ∷ xs)
       → Process xs
   rep : ∀ {xs} → Null xs → Process xs → Process xs
-  send : ∀ {xs ys zs T t C}
-       → xs ∋ₜ exhaust (T , t) ▹ ys
-       → ys ∋ₜ send T t C ▹ zs
+  send : ∀ {xs n ys m zs T t C}
+       → xs ∋ₜ at n (exhaust (T , t)) ▹ ys
+       → ys ∋ₜ at m (send T t C) ▹ zs
        → Process zs
        → Process xs
-  recv : ∀ {xs ys T C}
-       → ((t : ⟦ T ⟧ₜ) → xs ∋ₜ recv T t C ▹ ys × Process ((T , t) ∷ ys))
+  recv : ∀ {xs n ys T C}
+       → ((t : ⟦ T ⟧ₜ) → xs ∋ₜ at n (recv T t C) ▹ ys × Process ((T , t) ∷ ys))
        → Process xs
 
