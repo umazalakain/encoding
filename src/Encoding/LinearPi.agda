@@ -1,3 +1,4 @@
+open import Relation.Binary.PropositionalEquality using (_≡_; refl; trans)
 open import Function using (_∘_; _$_)
 open import Data.Unit using (⊤; tt)
 open import Data.List.Base using (List; []; _∷_)
@@ -78,10 +79,11 @@ data _⊆_ : ∀ {u} → ⟦ u ⟧ᵤ → ⟦ u ⟧ᵤ → Set₁ where
   [] : _⊆_ {ctx} [] []
 
   -- recursive
-  chan : ∀ {il ol ir or : Usage} {t}
+  chan : ∀ {il ol ir or : Usage} {s t}
        → il ⊆ ir
        → ol ⊆ or
-       → (chan il ol t , tt) ⊆ (chan ir or t , tt)
+       → s ≡ t
+       → (chan il ol s , tt) ⊆ (chan ir or t , tt)
   _∷_ : ∀ {l r ls rs}
       → _⊆_ {type} l r
       → _⊆_ {ctx} ls rs
@@ -209,13 +211,23 @@ repl A (suc n) = chan 1∙ 0∙ (prod A λ _ → repl A n)
 ⊆-refl {usage} ω∙ = ω∙
 ⊆-refl {type} (pure x , w) = pure
 ⊆-refl {type} (prod x y , w) = prod
-⊆-refl {type} (chan i o t , w) = chan (⊆-refl i) (⊆-refl o)
+⊆-refl {type} (chan i o t , w) = chan (⊆-refl i) (⊆-refl o) refl
 ⊆-refl {ctx} [] = []
 ⊆-refl {ctx} (x ∷ xs) = ⊆-refl x ∷ ⊆-refl xs
 
+⊆-trans : ∀ {u} {x y z : ⟦ u ⟧ᵤ} → x ⊆ y → y ⊆ z → x ⊆ z
+⊆-trans 0∙ b = b
+⊆-trans 1∙ b = b
+⊆-trans prod b = b
+⊆-trans ω∙ ω∙ = ω∙
+⊆-trans pure b = b
+⊆-trans [] b = b
+⊆-trans (chan ia oa eq) (chan ib ob qe) = chan (⊆-trans ia ib) (⊆-trans oa ob) (trans eq qe)
+⊆-trans (a ∷ as) (b ∷ bs) = ⊆-trans a b ∷ ⊆-trans as bs
+
 ⊆-repl : ∀ {A} n {t} → (repl A n , t) ⊆ (repl A n , t)
 ⊆-repl zero = pure
-⊆-repl (suc n) = chan 1∙ 0∙
+⊆-repl (suc n) = chan 1∙ 0∙ refl
 
 Null-+ : ∀ {u} {xs ys zs : ⟦ u ⟧ᵤ} → xs ≔ ys + zs → Null ys → Null zs → Null xs
 Null-+ 0∙ nys nzs = nzs
@@ -232,7 +244,7 @@ Null-⊆ {usage} n 0∙ = n
 Null-⊆ {usage} n ω∙ = ω∙
 Null-⊆ {type} n prod = n
 Null-⊆ {type} n pure = n
-Null-⊆ {type} (chan n n₁) (chan sub sub₁) = chan (Null-⊆ n sub) (Null-⊆ n₁ sub₁)
+Null-⊆ {type} (chan n n₁) (chan sub sub₁ eq) = chan (Null-⊆ n sub) (Null-⊆ n₁ sub₁)
 Null-⊆ {ctx} n [] = n
 Null-⊆ {ctx} (n ∷ n₁) (sub ∷ sub₁) = Null-⊆ n sub ∷ Null-⊆ n₁ sub₁
 
@@ -251,7 +263,7 @@ replrecv {_} {ys} sp null (suc n) t term =
   let (i , sp' , ni) = +-idˡ ys in
   let (i' , spi , nii) = +-idˡ i in
   letprod sp term
-  (recv (pure ∷ chan 1∙-left 0∙ ∷ sp') (var (there pure (here ni (chan 1∙ 0∙)))) λ where
+  (recv (pure ∷ chan 1∙-left 0∙ ∷ sp') (var (there pure (here ni (chan 1∙ 0∙ refl)))) λ where
     (tt , t') →
       let (_ , sp'' , ni') = +-idʳ (repl (pure ⊤) n , t') in
       let (_ , sp''' , ni'') = +-idˡ (repl (pure ⊤) n , t') in
@@ -262,7 +274,7 @@ _ : Process ((chan 1∙ 1∙ (prod (pure ℕ) (repl (pure ⊤))) , tt) ∷ [])
 _ = par (chan 1∙-left 1∙-right ∷ [])
   (recv
     (chan 1∙-left 0∙ ∷ [])
-    (var (here [] (chan 1∙ 0∙)))
+    (var (here [] (chan 1∙ 0∙ refl)))
     λ (n , c) → replrecv
       (prod-left ∷ chan 0∙ 0∙ ∷ [])
       (pure ∷ (chan 0∙ 0∙ ∷ []))
@@ -272,13 +284,13 @@ _ = par (chan 1∙-left 1∙-right ∷ [])
   (new 1∙ 1∙ (prod (pure ⊤) (λ _ → pure ⊤)) $
     send
       (chan 1∙-left 1∙-right ∷ chan 0∙ 1∙-right ∷ [])
-      (pair (chan 1∙-right 0∙ ∷ chan 0∙ 0∙ ∷ []) (pure 1 (chan 0∙ 0∙ ∷ (chan 0∙ 0∙ ∷ []))) (var (here (chan 0∙ 0∙ ∷ []) (chan 1∙ 0∙))))
+      (pair (chan 1∙-right 0∙ ∷ chan 0∙ 0∙ ∷ []) (pure 1 (chan 0∙ 0∙ ∷ (chan 0∙ 0∙ ∷ []))) (var (here (chan 0∙ 0∙ ∷ []) (chan 1∙ 0∙ refl))))
       (chan 0∙ 1∙-right ∷ (chan 0∙ 1∙-left ∷ []))
-      (var (there (chan 0∙ 0∙ ) (here [] (chan 0∙ 1∙)))) $
+      (var (there (chan 0∙ 0∙ ) (here [] (chan 0∙ 1∙ refl)))) $
       send
         (chan 0∙ 1∙-right ∷ chan 0∙ 0∙ ∷ [])
         (pair (chan 0∙ 0∙ ∷ (chan 0∙ 0∙ ∷ [])) (pure tt (chan 0∙ 0∙ ∷ (chan 0∙ 0∙ ∷ []))) (pure tt (chan 0∙ 0∙ ∷ (chan 0∙ 0∙ ∷ []))))
         (chan 0∙ 1∙-left ∷ (chan 0∙ 0∙ ∷ []))
-        (var (here (chan 0∙ 0∙ ∷ []) (chan 0∙ 1∙)))
+        (var (here (chan 0∙ 0∙ ∷ []) (chan 0∙ 1∙ refl)))
         (end (chan 0∙ 0∙ ∷ (chan 0∙ 0∙ ∷ []))))
 

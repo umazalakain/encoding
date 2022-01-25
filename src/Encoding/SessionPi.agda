@@ -13,6 +13,7 @@ mutual
     end : Session
     recv : (T : Type) → (⟦ T ⟧ₜ → Session) → Session
     send : (T : Type) → (⟦ T ⟧ₜ → Session) → Session
+    cont : (T : Type) → (⟦ T ⟧ₜ → Session) → Session
 
   ⟦_⟧ₜ : Type → Set
   ⟦ pure A ⟧ₜ = A
@@ -22,6 +23,7 @@ dual : Session → Session
 dual end = end
 dual (recv T C) = send T (dual ∘ C)
 dual (send T C) = recv T (dual ∘ C)
+dual (cont T C) = cont T C
 
 
 TypedValue : Set₁
@@ -67,13 +69,15 @@ data Null : ∀ {u} → ⟦ u ⟧ᵤ → Set₁ where
 data Action : Set₁ where
   at : ℕ → Action → Action
   exhaust : TypedValue → Action
-  recv : (T : Type) (t : ⟦ T ⟧ₜ) (C : ⟦ T ⟧ₜ → Session) → Action
-  send : (T : Type) (t : ⟦ T ⟧ₜ) (C : ⟦ T ⟧ₜ → Session) → Action
+  recv : (T : Type) (C : ⟦ T ⟧ₜ → Session) → Action
+  send : (T : Type) (C : ⟦ T ⟧ₜ → Session) → Action
+  cont : (T : Type) (t : ⟦ T ⟧ₜ) (C : ⟦ T ⟧ₜ → Session) → Action
 
 
 data _∋ₜ_▹_ : ∀ {u} → ⟦ u ⟧ᵤ → Action → ⟦ u ⟧ᵤ → Set₁ where
-  recv : ∀ {T} {S : ⟦ T ⟧ₜ → Session} {t} → (recv T S) ∋ₜ recv T t S ▹ (S t)
-  send : ∀ {T} {S : ⟦ T ⟧ₜ → Session} {t} → (send T S) ∋ₜ send T t S ▹ (S t)
+  recv : ∀ {T} {S : ⟦ T ⟧ₜ → Session} → _∋ₜ_▹_ {session} (recv T S) (recv T S) (cont T S)
+  send : ∀ {T} {S : ⟦ T ⟧ₜ → Session} → _∋ₜ_▹_ {session} (send T S) (send T S) (cont T S)
+  cont : ∀ {T} {S : ⟦ T ⟧ₜ → Session} {t} → (cont T S) ∋ₜ cont T t S ▹ (S t)
   chan : ∀ {x α x'} → x ∋ₜ α ▹ x' → (chan x , tt) ∋ₜ α ▹ (chan x' , tt)
   exhaust-pure : ∀ {A a} → (pure A , a) ∋ₜ exhaust (pure A , a) ▹ (pure A , a)
   exhaust-chan : ∀ {x} → (chan x , tt) ∋ₜ exhaust (chan x , tt) ▹ (pure ⊤ , tt)
@@ -96,12 +100,14 @@ data Process : Ctx → Set₁ where
       → Process ((chan S , tt) ∷ (chan (dual S) , tt) ∷ xs)
       → Process xs
   rep : ∀ {xs} → Null xs → Process xs → Process xs
-  send : ∀ {xs n ys m zs T t C}
+  send : ∀ {xs n ys m zs ws T t C}
        → xs ∋ₜ at n (exhaust (T , t)) ▹ ys
-       → ys ∋ₜ at m (send T t C) ▹ zs
-       → Process zs
+       → ys ∋ₜ at m (send T C) ▹ zs
+       → zs ∋ₜ at m (cont T t C) ▹ ws
+       → Process ws
        → Process xs
   recv : ∀ {xs n ys T C}
-       → ((t : ⟦ T ⟧ₜ) → xs ∋ₜ at n (recv T t C) ▹ ys × Process ((T , t) ∷ ys))
+       → xs ∋ₜ at n (recv T C) ▹ ys
+       → ((t : ⟦ T ⟧ₜ) → xs ∋ₜ at n (cont T t C) ▹ ys × Process ((T , t) ∷ ys))
        → Process xs
 
