@@ -70,16 +70,6 @@ postulate ⟦_⟧-≔-+ : ∀ {xs ys zs}
 postulate ∋ₜ-exhaust : ∀ {xs n zs T t} → xs S.∋ₜ S.at n (S.exhaust (T , t)) ▹ zs
                      → Σ[ ys ∈ L.Ctx ] ⟦ xs ⟧ₑ-ctx L.≔ ys + ⟦ zs ⟧ₑ-ctx × L.Term ys (⟦ T ⟧ₑ-type , encode T t)
 
-postulate Term-lift : ∀ {x xs t}
-                    → L.Null x
-                    → L.Term xs t
-                    → L.Term (x ∷ xs) t
-
-postulate Process-lift : ∀ {x xs}
-                       → L.Null x
-                       → L.Process xs
-                       → L.Process (x ∷ xs)
-
 ∋ₜ-send : ∀ {xs n T C ys zs}
         → xs S.∋ₜ S.at n (S.send T C) ▹ ys
         → ⟦ ys ⟧ₑ-ctx L.[ n ↦ L.chan L.0∙ L.0∙ (L.prod ⟦ T ⟧ₑ-type (encode-cont-flip T C)), tt ]≔ zs
@@ -91,7 +81,7 @@ postulate Process-lift : ∀ {x xs}
   = ! L.chan L.0∙ L.1∙-left L.∷ id , L.var (L.here null (L.chan L.0∙ L.1∙ refl))
 ∋ₜ-send {(T , t) ∷ _} (S.there x) (L.there s)
   with ! id , null ← L.+-idˡ (⟦ T ⟧ₑ-type , encode T t)
-  = Product.map _ (Product.map (id L.∷_) (Term-lift null)) (∋ₜ-send x s)
+  = Product.map _ (Product.map (id L.∷_) (L.Term-lift null)) (∋ₜ-send x s)
 
 
 mutual
@@ -119,13 +109,13 @@ mutual
     $ L.send
       (t̂-left L.∷ t-right  L.∷ spv)
       (L.pair (t̂-right L.∷ a-right L.∷ Δ-left)
-              (Term-lift t̂-nleft (Term-lift a-nleft tv))
+              (L.Term-lift t̂-nleft (L.Term-lift a-nleft tv))
               (L.var (L.here (t-nleft L.∷ Δ-null) (L.chan
                 (subst (λ ● → proj₁ (proj₂ (⟦ C ● ⟧ₑ-session)) L.⊆ co) (sym (decode-encode T {t})) (subst (L._⊆ co) (cong (proj₁ ∘ proj₂) (sym eq)) (L.⊆-refl _)))
                 (subst (λ ● → proj₁ (⟦ C ● ⟧ₑ-session) L.⊆ ci)         (sym (decode-encode T {t})) (subst (L._⊆ ci) (cong (proj₁)         (sym eq)) (L.⊆-refl _)))
                 (trans (cong (λ ● → proj₂ (proj₂ ⟦ C ● ⟧ₑ-session)) (decode-encode T {t})) (cong (proj₂ ∘ proj₂) eq))))))
       (b-right L.∷ t-right L.∷ spc)
-      (Term-lift b-nleft (Term-lift t-nleft tc))
-      (Process-lift t̂-nright {!⟦ p ⟧ₚ!})
+      (L.Term-lift b-nleft (L.Term-lift t-nleft tc))
+      (L.Process-lift t̂-nright (L.subst-proc (L.chan {!!} {!!} L.∷ {!!}) {!!} {!!} ⟦ p ⟧ₚ) )
   ⟦ S.recv s p ⟧ₚ
     = L.recv {!!} {!!} λ t → {!p t!}
