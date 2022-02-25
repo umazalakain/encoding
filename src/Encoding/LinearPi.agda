@@ -1,5 +1,5 @@
 {-# OPTIONS --allow-unsolved-metas #-}
-open import Relation.Binary.PropositionalEquality using (_≡_; refl; trans)
+open import Relation.Binary.PropositionalEquality using (_≡_; refl; trans; cong; cong₂)
 open import Function using (_∘_; _$_)
 open import Data.Unit using (⊤; tt)
 open import Data.List.Base using (List; []; _∷_)
@@ -99,10 +99,6 @@ data Null : ∀ {u} → ⟦ u ⟧ᵤ → Set₁ where
        → Null i
        → Null o
        → Null (chan i o t , tt)
-  prod : ∀ {A B a b}
-       → Null (A , a)
-       → Null (B a , b)
-       → Null (prod A B , (a , b))
   [] : Null {u = ctx} []
   _∷_ : ∀ {x xs}
       → Null {u = type} x
@@ -230,15 +226,21 @@ repl A (suc n) = chan 1∙ 0∙ (prod A λ _ → repl A n)
 ⊆-repl zero = pure
 ⊆-repl (suc n) = chan 1∙ 0∙ refl
 
-Null-+ : ∀ {u} {xs ys zs : ⟦ u ⟧ᵤ} → xs ≔ ys + zs → Null ys → Null zs → Null xs
-Null-+ 0∙ nys nzs = nzs
-Null-+ prod-left nys nzs = nys
-Null-+ prod-right nys nzs = nzs
-Null-+ ω∙ nys nzs = nzs
-Null-+ pure nys nzs = nzs
-Null-+ [] nys nzs = nzs
-Null-+ (chan sp sp₁) (chan nys nys₁) (chan nzs nzs₁) = chan (Null-+ sp nys nzs) (Null-+ sp₁ nys₁ nzs₁)
-Null-+ (sp ∷ sp₁) (nys ∷ nys₁) (nzs ∷ nzs₁) = Null-+ sp nys nzs ∷ Null-+ sp₁ nys₁ nzs₁
++-cancel : ∀ {u} {a b c : ⟦ u ⟧ᵤ} → a ≔ b + c → Null c → a ≡ b
++-cancel 0∙ null = refl
++-cancel 1∙-left null = refl
++-cancel prod-left null = refl
++-cancel ω∙ null = refl
++-cancel pure null = refl
++-cancel [] null = refl
++-cancel (chan i o) (chan inull onull) rewrite +-cancel i inull | +-cancel o onull = refl
++-cancel (spl ∷ spls) (null ∷ nulls) = cong₂ _∷_ (+-cancel spl null) (+-cancel spls nulls)
+
+null-unrestr : ∀ {u} {xs : ⟦ u ⟧ᵤ} → Null xs → xs ≔ xs + xs
+null-unrestr {xs = xs} null
+  with _ , fill , fillnull ← +-idˡ xs
+  with refl ← +-cancel fill null
+  = fill
 
 Null-⊆ : ∀ {u} {x y : ⟦ u ⟧ᵤ} → Null x → x ⊆ y → Null y
 Null-⊆ {usage} n 0∙ = n
@@ -249,6 +251,10 @@ Null-⊆ {type} (chan n n₁) (chan sub sub₁ eq) = chan (Null-⊆ n sub) (Null
 Null-⊆ {ctx} n [] = n
 Null-⊆ {ctx} (n ∷ n₁) (sub ∷ sub₁) = Null-⊆ n sub ∷ Null-⊆ n₁ sub₁
 
+Null-0∙⊆ : {x : Usage} → Null x → 0∙ ⊆ x
+Null-0∙⊆ 0∙ = 0∙
+Null-0∙⊆ ω∙ = ω∙
+
 Null-∋ : ∀ {t xs} → Null t → xs ∋ t → Null xs
 Null-∋ n (here n' x) = Null-⊆ n x ∷ n'
 Null-∋ n (there n' x) = n' ∷ Null-∋ n x
@@ -256,73 +262,86 @@ Null-∋ n (there n' x) = n' ∷ Null-∋ n x
 Null-Term : ∀ {t xs} → Null t → Term xs t → Null xs
 Null-Term n (var x) = Null-∋ n x
 Null-Term n (pure _ x) = x
-Null-Term (prod n n₁) (pair x t t₁) = Null-+ x (Null-Term n t) (Null-Term n₁ t₁)
-
-+-Null : ∀ {u} {x : ⟦ u ⟧ᵤ} → Null x → x ≔ x + x
-+-Null {usage} 0∙ = 0∙
-+-Null {usage} ω∙ = ω∙
-+-Null {type} pure = pure
-+-Null {type} (chan i o) = chan (+-Null i) (+-Null o)
-+-Null {type} (prod l r) = {!prod-left!}
-+-Null {ctx} null = {!!}
-
-Term-lift : ∀ {x xs t} → Null x → Term xs t → Term (x ∷ xs) t
-Term-lift null (var x) = {!!}
-Term-lift null (pure a x) = pure a (null ∷ x)
-Term-lift null (pair x l r) = pair ({!!} ∷ x) (Term-lift null l) (Term-lift null r)
-
-
-postulate Process-lift : ∀ {x xs} → Null x → Process xs → Process (x ∷ xs)
 
 data InsertAt : ℕ → TypedValue → Ctx → Ctx → Set₁ where
   here : ∀ {x xs} → InsertAt zero x xs (x ∷ xs)
   there : ∀ {n x xs ys x'} → InsertAt n x xs ys → InsertAt (suc n) x (x' ∷ xs) (x' ∷ ys)
 
 
+null-insert : ∀ {n x xs ys} → InsertAt n x xs ys → Null x → Null xs → Null ys
+null-insert here nx nxs = nx ∷ nxs
+null-insert (there ins) nx (nx' ∷ nxs) = nx' ∷ null-insert ins nx nxs
+
 insert-null : ∀ {n t xs ys} → InsertAt n t xs ys → Null ys → Null t × Null xs
 insert-null here (t-null ∷ xs-null) = t-null , xs-null
 insert-null (there ins) (x-null ∷ xs-null) = Product.map₂ (x-null ∷_) (insert-null ins xs-null)
 
-⊆-term : ∀ {s t xs} → s ⊆ t → Term xs t → Term xs s
-⊆-term sub x = {!!}
-
-subst-var : ∀ {xs ys zs t n ws s}
-           → xs ≔ ys + zs
-           → Term ys t
-           → InsertAt n t zs ws
-           → ws ∋ s
-           → Term xs s
-subst-var spl term here (here x x₁) = ⊆-term x₁ {!!}
-subst-var (spl ∷ spl₁) term (there ins) (here x x₁) = {!!}
-subst-var spl term ins (there x ni) = {!!}
-
-subst-term : ∀ {xs ys zs t n ws s}
-           → xs ≔ ys + zs
-           → Term ys t
-           → InsertAt n t zs ws
-           → Term ws s
-           → Term xs s
-subst-term spl term ins (var x) = subst-var spl term ins x
-subst-term spl term ins (pure a x) = {!!}
-subst-term spl term ins (pair spl' l r) = pair {!!} (subst-term {!!} {!!} {!!} {!!}) (subst-term {!!} {!!} {!!} {!!})
-  
 extract : ∀ {n t zs ms ls rs} → InsertAt n t zs ms → ms ≔ ls + rs → Σ[ (x , y , xs , ys) ∈ (TypedValue × TypedValue × Ctx × Ctx) ] t ≔ x + y × zs ≔ xs + ys × InsertAt n x xs ls × InsertAt n y ys rs
 extract here (spl ∷ spls) = _ , spl , spls , here , here
 extract (there ins) (spl ∷ spls) =
   let _ , spl' , spls' , insl , insr = extract ins spls in
   _ , spl' , spl ∷ spls' , there insl , there insr
 
-var-split : ∀ {xs x y z} → xs ∋ x → x ≔ y + z → Σ[ (ys , zs) ∈ Ctx × Ctx ] xs ≔ ys + zs × ys ∋ y × zs ∋ z
-var-split (here null lt) spl = {!!} , {!!} ∷ {!!} , here {!!} {!!} , {!!}
-var-split (there x vr) spl = {!!}
+imtract : ∀ {xs ys zs x y z n ms} → xs ≔ ys + zs → x ≔ y + z → InsertAt n x xs ms → Σ[ (ls , rs) ∈ Ctx × Ctx ] ms ≔ ls + rs × InsertAt n y ys ls × InsertAt n z zs rs
+imtract spl spl1 here = _ , spl1 ∷ spl , here , here
+imtract (spl ∷ spls) spl1 (there ins) =
+  let _ , spl2 , insl , insr = imtract spls spl1 ins in
+  _ , spl ∷ spl2 , there insl , there insr
 
-term-split : ∀ {xs x y z} → Term xs x → x ≔ y + z → Σ[ (ys , zs) ∈ Ctx × Ctx ] xs ≔ ys + zs × Term ys y × Term zs z
-term-split (var x) spl
-  with _ , spl1 , lvr , rvr ← var-split x spl
-  = _ , spl1 , var lvr , var rvr
-term-split (pure a x) pure = {!!} , {!!} , pure a x , pure a x
-term-split (pair spl1 lterm rterm) prod-left = {!!} , {!!} , pair spl1 lterm rterm , pure tt {!!}
-term-split (pair spl1 lterm rterm) prod-right = {!!}
+Var-null-insert : ∀ {x n xs ys t} → Null x → InsertAt n x xs ys → xs ∋ t → ys ∋ t
+Var-null-insert null here vr = there null vr
+Var-null-insert null (there ins) (here null' sub) = here (null-insert ins null null') sub
+Var-null-insert null (there ins) (there null' vr) = there null' (Var-null-insert null ins vr)
+
+Term-null-insert : ∀ {x n xs ys t} → Null x → InsertAt n x xs ys → Term xs t → Term ys t
+Term-null-insert null ins (var x) = var (Var-null-insert null ins x)
+Term-null-insert null ins (pure a x) = pure a (null-insert ins null x)
+Term-null-insert {x} null ins (pair spl l r)
+  with _ , fill , fillnull ← +-idˡ x
+  with _ , spl1 , insl , insr ← imtract spl fill ins
+  = pair spl1 (Term-null-insert fillnull insl l) (Term-null-insert null insr r)
+
+Process-null-insert : ∀ {x n xs ys} → Null x → InsertAt n x xs ys → Process xs → Process ys
+Process-null-insert null ins (end x) = end (null-insert ins null x)
+Process-null-insert {x} null ins (par spl p q)
+  with _ , fill , fillnull ← +-idˡ x
+  with _ , spl1 , insl , insr ← imtract spl fill ins
+  = par spl1 (Process-null-insert fillnull insl p) (Process-null-insert null insr q)
+Process-null-insert null ins (new i o t proc) = new i o t (Process-null-insert null (there ins) proc)
+Process-null-insert null ins (rep x proc) = rep (null-insert ins null x) (Process-null-insert null ins proc)
+Process-null-insert {x} null ins (send spl-payload payload spl-channel channel proc)
+  with _ , fill , fillnull ← +-idˡ x
+  with _ , spl1 , insl , insr ← imtract spl-payload fill ins
+  with _ , spl2 , insrl , insrr ← imtract spl-channel fill insr
+  = send
+    spl1 (Term-null-insert fillnull insl payload)
+    spl2 (Term-null-insert fillnull insrl channel)
+    (Process-null-insert null insrr proc)
+Process-null-insert {x} null ins (recv spl-channel channel cont)
+  with _ , fill , fillnull ← +-idˡ x
+  with _ , spl1 , insl , insr ← imtract spl-channel fill ins
+  = recv spl1 (Term-null-insert fillnull insl channel) (Process-null-insert null (there insr) ∘ cont)
+Process-null-insert {x} null ins (letprod spl-prd prd proc)
+  with _ , fill , fillnull ← +-idˡ x
+  with _ , spl1 , insl , insr ← imtract spl-prd fill ins
+  = letprod spl1 (Term-null-insert fillnull insl prd) (Process-null-insert null (there (there insr)) proc)
+
+
+Term-lift : ∀ {x xs t} → Null x → Term xs t → Term (x ∷ xs) t
+Term-lift null = Term-null-insert null here
+
+Process-lift : ∀ {x xs} → Null x → Process xs → Process (x ∷ xs)
+Process-lift null = Process-null-insert null here
+
+
+⊆-var : ∀ {s t xs} → s ⊆ t → xs ∋ t → xs ∋ s
+⊆-var sub (here x x₁) = here x (⊆-trans sub x₁)
+⊆-var sub (there x vr) = there x (⊆-var sub vr)
+
+⊆-term : ∀ {s t xs} → s ⊆ t → Term xs t → Term xs s
+⊆-term sub (var x) = var (⊆-var sub x)
+⊆-term pure (pure a x) = pure a x
+⊆-term prod (pair spl l r) = pair spl (⊆-term (⊆-refl _) l) (⊆-term (⊆-refl _) r)
 
 reorient : ∀ {u} {xs ys zs as bs ps qs : ⟦ u ⟧ᵤ} → xs ≔ ys + zs → ys ≔ ps + qs → zs ≔ as + bs → Σ[ (ys' , zs') ∈ ⟦ u ⟧ᵤ × ⟦ u ⟧ᵤ ] xs ≔ ys' + zs' × ys' ≔ ps + as × zs' ≔ qs + bs
 reorient {usage} 0∙ 0∙ 0∙ = _ , 0∙ , 0∙ , 0∙
@@ -346,6 +365,69 @@ reorient {ctx} (x ∷ mid) (y ∷ left) (z ∷ right)
   with _ , mid' , left' , right' ← reorient mid left right
   = _ , x' ∷ mid' , y' ∷ left' , z' ∷ right'
 
+subst-var : ∀ {xs ys zs t n ws s}
+           → xs ≔ ys + zs
+           → Term ys t
+           → InsertAt n t zs ws
+           → ws ∋ s
+           → xs ∋ s
+-- FIXME: index ∋ by natural number, disallow the index being eliminated (n) being the index of ws ∋ s
+subst-var spl term here (here null sub) = {!h!} -- rewrite +-cancel spl null = {!here!}
+subst-var (spl ∷ spls) term (there ins) (here null sub) = {!here!}
+subst-var spl term ins (there x ni) = {!!}
+
+subst-term : ∀ {xs ys zs t n ws s}
+           → xs ≔ ys + zs
+           → Term ys t
+           → InsertAt n t zs ws
+           → Term ws s
+           → Term xs s
+subst-term spl term ins (var x) = var (subst-var spl term ins x)
+subst-term spl term ins (pure a x) = {!!}
+subst-term spl term ins (pair spl' l r) = pair {!!} (subst-term {!!} {!!} {!!} {!!}) (subst-term {!!} {!!} {!!} {!!})
+
+⊆-split : ∀ {u} {x y z x' : ⟦ u ⟧ᵤ} → x ≔ y + z → x ⊆ x' → Σ[ (y' , z') ∈ ⟦ u ⟧ᵤ × ⟦ u ⟧ᵤ ] x' ≔ y' + z' × y ⊆ y' × z ⊆ z'
+⊆-split {x' = x'} 0∙ sub = let _ , fill , fillnull = +-idʳ x' in _ , fill , sub , Null-0∙⊆ fillnull
+⊆-split {x' = x'} 1∙-left sub = let _ , fill , fillnull = +-idʳ x' in _ , fill , sub , Null-0∙⊆ fillnull
+⊆-split {x' = x'} 1∙-right sub = let _ , fill , fillnull = +-idˡ x' in _ , fill , Null-0∙⊆ fillnull , sub
+⊆-split prod-left prod = _ , prod-left , ⊆-refl _ , ⊆-refl _
+⊆-split prod-right prod = _ , prod-right , ⊆-refl _ , ⊆-refl _
+⊆-split ω∙ ω∙ = _ , ω∙ , ω∙ , ω∙
+⊆-split pure pure = _ , pure , pure , pure
+⊆-split [] [] = _ , [] , [] , []
+⊆-split (chan i o) (chan isub osub eq) =
+  let _ , ispl , isubl , isubr = ⊆-split i isub in
+  let _ , ospl , osubl , osubr = ⊆-split o osub in
+  _ , chan ispl ospl , chan isubl osubl eq , chan isubr osubr eq
+⊆-split (spl ∷ spls) (sub ∷ subs) =
+  let _ , spl' , subl' , subr' = ⊆-split spl sub in
+  let _ , spls' , subls' , subrs' = ⊆-split spls subs in
+  _ , spl' ∷ spls' , subl' ∷ subls' , subr' ∷ subrs'
+
+var-split : ∀ {xs x y z} → xs ∋ x → x ≔ y + z → Σ[ (ys , zs) ∈ Ctx × Ctx ] xs ≔ ys + zs × ys ∋ y × zs ∋ z
+var-split {_ ∷ xs} (here null lt) spl
+  with _ , fill , fillnull ← +-idʳ xs
+  with _ , spl1 , subl , subr ← ⊆-split spl lt
+  = _ , spl1 ∷ fill , here null subl , here fillnull subr
+var-split {xs = x ∷ _} (there n vr) spl
+  with _ , fill , fillnull ← +-idʳ x
+  with _ , spl' , inl , inr ← var-split vr spl
+  = _ , fill ∷ spl' , there n inl , there fillnull inr
+
+term-split : ∀ {xs x y z} → Term xs x → x ≔ y + z → Σ[ (ys , zs) ∈ Ctx × Ctx ] xs ≔ ys + zs × Term ys y × Term zs z
+term-split (var x) spl
+  with _ , spl1 , lvr , rvr ← var-split x spl
+  = _ , spl1 , var lvr , var rvr
+term-split {xs} (pure a x) pure
+  with _ , fill , fillnull ← +-idʳ xs
+  = _ , null-unrestr x , pure a x , pure a x
+term-split {xs} (pair spl1 lterm rterm) prod-left
+  with _ , fill , fillnull ← +-idʳ xs
+  = _ , fill , pair spl1 lterm rterm , pure tt fillnull
+term-split {xs} (pair spl1 lterm rterm) prod-right
+  with _ , fill , fillnull ← +-idˡ xs
+  = _ , fill , pure tt fillnull , pair spl1 lterm rterm
+
 subst-proc : ∀ {xs ys zs t n ws}
            → xs ≔ ys + zs
            → Term ys t
@@ -354,7 +436,8 @@ subst-proc : ∀ {xs ys zs t n ws}
            → Process xs
 subst-proc spl term ins (end ws-null)
   with t-null , zs-null ← insert-null ins ws-null
-  = end (Null-+ spl (Null-Term t-null term) zs-null)
+  rewrite +-cancel spl zs-null
+  = end (Null-Term t-null term)
 subst-proc spl term ins (par spl1 p q)
   with (a , b , as , bs) , tspl , cspl , insl , insr ← extract ins spl1
   with _ , spl2 , lterm , rterm ← term-split term tspl
@@ -366,7 +449,8 @@ subst-proc spl term ins (new i o t p)
   = new i o t (subst-proc (chan ispl ospl ∷ spl) (Term-lift (chan inull onull) term) (there ins) p)
 subst-proc spl term ins (rep ws-null p)
   with t-null , zs-null ← insert-null ins ws-null
-  = rep (Null-+ spl (Null-Term t-null term) zs-null) (subst-proc spl term ins p)
+  with refl ← +-cancel spl zs-null
+  = rep (Null-Term t-null term) (subst-proc spl term ins p)
 subst-proc spl term ins (send {ms} {ls} {rs} spl-payload payload spl-channel channel p)
   with (a , b , as , bs) , tspl , cspl , insl , insr ← extract ins spl-payload
   with (q , k , qs , ks) , foo , bar , asd , das ← extract {!!} {!!}
