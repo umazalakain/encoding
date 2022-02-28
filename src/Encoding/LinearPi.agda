@@ -161,12 +161,6 @@ data Process : Ctx → Set₁ where
           → Process xs
 
 
-data _[_↦_]≔_ {a} {A : Set a} : List A → ℕ → A → List A → Set where
-  here : ∀ {x xs t} → (x ∷ xs) [ zero ↦ t ]≔ (t ∷ xs)
-  there : ∀ {xs i t ys x}
-        → xs [ i ↦ t ]≔ ys
-        → (x ∷ xs) [ suc i ↦ t ]≔ (x ∷ ys)
-
 repl : Type → ℕ → Type
 repl A zero = pure ⊤
 repl A (suc n) = chan 1∙ 0∙ (prod A λ _ → repl A n)
@@ -365,26 +359,19 @@ reorient {ctx} (x ∷ mid) (y ∷ left) (z ∷ right)
   with _ , mid' , left' , right' ← reorient mid left right
   = _ , x' ∷ mid' , y' ∷ left' , z' ∷ right'
 
-subst-var : ∀ {xs ys zs t n ws s}
-           → xs ≔ ys + zs
-           → Term ys t
-           → InsertAt n t zs ws
-           → ws ∋ s
-           → xs ∋ s
--- FIXME: index ∋ by natural number, disallow the index being eliminated (n) being the index of ws ∋ s
-subst-var spl term here (here null sub) = {!h!} -- rewrite +-cancel spl null = {!here!}
-subst-var (spl ∷ spls) term (there ins) (here null sub) = {!here!}
-subst-var spl term ins (there x ni) = {!!}
+data Occurs? : Ctx → TypedValue → TypedValue → Set₁ where
+  yes : ∀ {xs x y} → Null xs → y ⊆ x → Occurs? xs x y
+  no  : ∀ {xs x y} → Null x → xs ∋ y → Occurs? xs x y
 
-subst-term : ∀ {xs ys zs t n ws s}
-           → xs ≔ ys + zs
-           → Term ys t
-           → InsertAt n t zs ws
-           → Term ws s
-           → Term xs s
-subst-term spl term ins (var x) = var (subst-var spl term ins x)
-subst-term spl term ins (pure a x) = {!!}
-subst-term spl term ins (pair spl' l r) = pair {!!} (subst-term {!!} {!!} {!!} {!!}) (subst-term {!!} {!!} {!!} {!!})
+occurs? : ∀ {n t xs ys s} → InsertAt n t xs ys → ys ∋ s → Occurs? xs t s
+occurs? here (here x sub) = yes x sub
+occurs? here (there x ni) = no x ni
+occurs? (there ins) (here x sub) =
+  let t-null , xs-null = insert-null ins x in
+  no t-null (here xs-null sub)
+occurs? (there ins) (there x-null ni) with occurs? ins ni
+... | yes xs-null sub = yes (x-null ∷ xs-null) sub
+... | no t-null ni = no t-null (there x-null ni)
 
 ⊆-split : ∀ {u} {x y z x' : ⟦ u ⟧ᵤ} → x ≔ y + z → x ⊆ x' → Σ[ (y' , z') ∈ ⟦ u ⟧ᵤ × ⟦ u ⟧ᵤ ] x' ≔ y' + z' × y ⊆ y' × z ⊆ z'
 ⊆-split {x' = x'} 0∙ sub = let _ , fill , fillnull = +-idʳ x' in _ , fill , sub , Null-0∙⊆ fillnull
@@ -428,6 +415,33 @@ term-split {xs} (pair spl1 lterm rterm) prod-right
   with _ , fill , fillnull ← +-idˡ xs
   = _ , fill , pure tt fillnull , pair spl1 lterm rterm
 
+subst-var : ∀ {xs ys zs t n ws s}
+           → xs ≔ ys + zs
+           → Term ys t
+           → InsertAt n t zs ws
+           → ws ∋ s
+           → Term xs s
+subst-var spl term ins ni with occurs? ins ni
+... | yes zs-null s⊆t rewrite +-cancel spl zs-null = ⊆-term s⊆t term
+... | no t-null zs∋s rewrite +-cancel (+-comm spl) (Null-Term t-null term) = var zs∋s
+
+subst-term : ∀ {xs ys zs t n ws s}
+           → xs ≔ ys + zs
+           → Term ys t
+           → InsertAt n t zs ws
+           → Term ws s
+           → Term xs s
+subst-term spl term ins (var x) = subst-var spl term ins x
+subst-term spl term ins (pure a ws-null)
+  with t-null , zs-null ← insert-null ins ws-null
+  rewrite +-cancel spl zs-null
+  = pure a (Null-Term t-null term)
+subst-term spl term ins (pair spl1 l r)
+  with _ , tspl , cspl , insl , insr ← extract ins spl1
+  with _ , spl2 , lterm , rterm ← term-split term tspl
+  with _ , spl' , lspl' , rspl' ← reorient spl spl2 cspl
+  = pair spl' (subst-term lspl' lterm insl l) (subst-term rspl' rterm insr r)
+
 subst-proc : ∀ {xs ys zs t n ws}
            → xs ≔ ys + zs
            → Term ys t
@@ -439,7 +453,7 @@ subst-proc spl term ins (end ws-null)
   rewrite +-cancel spl zs-null
   = end (Null-Term t-null term)
 subst-proc spl term ins (par spl1 p q)
-  with (a , b , as , bs) , tspl , cspl , insl , insr ← extract ins spl1
+  with _ , tspl , cspl , insl , insr ← extract ins spl1
   with _ , spl2 , lterm , rterm ← term-split term tspl
   with _ , spl' , lspl' , rspl' ← reorient spl spl2 cspl
   = par spl' (subst-proc lspl' lterm insl p) (subst-proc rspl' rterm insr q)
@@ -452,24 +466,27 @@ subst-proc spl term ins (rep ws-null p)
   with refl ← +-cancel spl zs-null
   = rep (Null-Term t-null term) (subst-proc spl term ins p)
 subst-proc spl term ins (send {ms} {ls} {rs} spl-payload payload spl-channel channel p)
-  with (a , b , as , bs) , tspl , cspl , insl , insr ← extract ins spl-payload
-  with (q , k , qs , ks) , foo , bar , asd , das ← extract {!!} {!!}
-  with _ , spl2 , lterm , rterm ← term-split term tspl
-  = send
-  {!!}
-  (subst-term {!!} {!!} insl payload)
-  {!!}
-  (subst-term {!!} {!!} {!!} channel)
-  (subst-proc {!!} {!!} {!!} p)
-subst-proc spl term ins (recv {ms} {ls} {rs} {T} spl-channel channel cont)
-  with (a , b , as , bs) , tspl , cspl , insl , insr ← extract ins spl-channel
+  with _ , spl-payload1 , spl-rest , ins-payload , ins-rest ← extract ins spl-payload
+  with _ , spl-term , term-l , term-rest ← term-split term spl-payload1
+  with _ , spl-payload2 , lspl-term , spl-rest2 ← reorient spl spl-term spl-rest
+  with _ , spl-channel1 , spl-cont , ins-channel , ins-cont ← extract ins-rest spl-channel
+  with _ , spl-term2 , term-channel , term-cont ← term-split term-rest spl-channel1
+  with _ , spl-channel2 , spl-term-chan , spl-term-cont ← reorient spl-rest2 spl-term2 spl-cont
+  = send spl-payload2 (subst-term lspl-term term-l ins-payload payload)
+  spl-channel2 (subst-term spl-term-chan term-channel ins-channel channel)
+  (subst-proc spl-term-cont term-cont ins-cont p)
+subst-proc spl term ins (recv {T = T} spl-channel channel cont)
+  with _ , tspl , cspl , insl , insr ← extract ins spl-channel
   with _ , spl2 , lterm , rterm ← term-split term tspl
   with _ , spl' , lspl' , rspl' ← reorient spl spl2 cspl
   = recv spl' (subst-term lspl' lterm insl channel) λ t →
     let _ , tright , tfill = +-idˡ (T , t)
     in subst-proc (tright ∷ rspl') (Term-lift tfill rterm) (there insr) (cont t)
-subst-proc spl term ins (letprod spl-prod prd p)
-  = letprod
-  {!!}
-  (subst-term {!!} {!!} {!!} {!!})
-  (subst-proc ({!!} ∷ {!!} ∷ {!!}) {!!} {!!} {!!})
+subst-proc spl term ins (letprod {A = A} {B} {a} {b} spl-prod prd p)
+  with _ , tspl , cspl , insl , insr ← extract ins spl-prod
+  with _ , spl2 , lterm , rterm ← term-split term tspl
+  with _ , spl' , lspl' , rspl' ← reorient spl spl2 cspl
+  with _ , aright , afill ← +-idˡ (A , a)
+  with _ , bright , bfill ← +-idˡ (B a , b)
+  = letprod spl' (subst-term lspl' lterm insl prd)
+  (subst-proc (aright ∷ bright ∷ rspl') (Term-lift afill (Term-lift bfill rterm)) (there (there insr)) p)
