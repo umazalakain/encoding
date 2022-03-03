@@ -415,6 +415,25 @@ term-split {xs} (pair spl1 lterm rterm) prod-right
   with _ , fill , fillnull ← +-idˡ xs
   = _ , fill , pure tt fillnull , pair spl1 lterm rterm
 
+redistribute : ∀ {orig left right n t elim enrich extra}
+  → orig ≔ left + right
+  → InsertAt n t elim orig
+  → enrich ≔ extra + elim
+  → Term extra t
+  → Σ[ (as , bs , cs , ds , es , fs , a , b) ∈ Ctx × Ctx × Ctx × Ctx × Ctx × Ctx × TypedValue × TypedValue ]
+    enrich ≔ as + bs
+  × as ≔ cs + ds
+  × bs ≔ es + fs
+  × Term cs a
+  × Term es b
+  × InsertAt n a ds left
+  × InsertAt n b fs right
+redistribute orig ins enrich term
+  with _ , tspl , cspl , insl , insr ← extract ins orig
+  with _ , spl2 , lterm , rterm ← term-split term tspl
+  with _ , spl' , lspl' , rspl' ← reorient enrich spl2 cspl
+  = _ , spl' , lspl' , rspl' , lterm , rterm , insl , insr
+
 subst-var : ∀ {xs ys zs t n ws s}
            → xs ≔ ys + zs
            → Term ys t
@@ -453,9 +472,7 @@ subst-proc spl term ins (end ws-null)
   rewrite +-cancel spl zs-null
   = end (Null-Term t-null term)
 subst-proc spl term ins (par spl1 p q)
-  with _ , tspl , cspl , insl , insr ← extract ins spl1
-  with _ , spl2 , lterm , rterm ← term-split term tspl
-  with _ , spl' , lspl' , rspl' ← reorient spl spl2 cspl
+  with _ , spl' , lspl' , rspl' , lterm , rterm , insl , insr ← redistribute spl1 ins spl term
   = par spl' (subst-proc lspl' lterm insl p) (subst-proc rspl' rterm insr q)
 subst-proc spl term ins (new i o t p)
   with _ , ispl , inull ← +-idˡ i
@@ -466,26 +483,18 @@ subst-proc spl term ins (rep ws-null p)
   with refl ← +-cancel spl zs-null
   = rep (Null-Term t-null term) (subst-proc spl term ins p)
 subst-proc spl term ins (send {ms} {ls} {rs} spl-payload payload spl-channel channel p)
-  with _ , spl-payload1 , spl-rest , ins-payload , ins-rest ← extract ins spl-payload
-  with _ , spl-term , term-l , term-rest ← term-split term spl-payload1
-  with _ , spl-payload2 , lspl-term , spl-rest2 ← reorient spl spl-term spl-rest
-  with _ , spl-channel1 , spl-cont , ins-channel , ins-cont ← extract ins-rest spl-channel
-  with _ , spl-term2 , term-channel , term-cont ← term-split term-rest spl-channel1
-  with _ , spl-channel2 , spl-term-chan , spl-term-cont ← reorient spl-rest2 spl-term2 spl-cont
+  with _ , spl-payload2 , lspl-term , spl-rest2 , term-l , term-rest , ins-payload , ins-rest ← redistribute spl-payload ins spl term
+  with _ , spl-channel2 , spl-term-chan , spl-term-cont , term-channel , term-cont , ins-channel , ins-cont ← redistribute spl-channel ins-rest spl-rest2 term-rest
   = send spl-payload2 (subst-term lspl-term term-l ins-payload payload)
   spl-channel2 (subst-term spl-term-chan term-channel ins-channel channel)
   (subst-proc spl-term-cont term-cont ins-cont p)
 subst-proc spl term ins (recv {T = T} spl-channel channel cont)
-  with _ , tspl , cspl , insl , insr ← extract ins spl-channel
-  with _ , spl2 , lterm , rterm ← term-split term tspl
-  with _ , spl' , lspl' , rspl' ← reorient spl spl2 cspl
+  with _ , spl' , lspl' , rspl' , lterm , rterm , insl , insr ← redistribute spl-channel ins spl term
   = recv spl' (subst-term lspl' lterm insl channel) λ t →
     let _ , tright , tfill = +-idˡ (T , t)
     in subst-proc (tright ∷ rspl') (Term-lift tfill rterm) (there insr) (cont t)
 subst-proc spl term ins (letprod {A = A} {B} {a} {b} spl-prod prd p)
-  with _ , tspl , cspl , insl , insr ← extract ins spl-prod
-  with _ , spl2 , lterm , rterm ← term-split term tspl
-  with _ , spl' , lspl' , rspl' ← reorient spl spl2 cspl
+  with _ , spl' , lspl' , rspl' , lterm , rterm , insl , insr ← redistribute spl-prod ins spl term
   with _ , aright , afill ← +-idˡ (A , a)
   with _ , bright , bfill ← +-idˡ (B a , b)
   = letprod spl' (subst-term lspl' lterm insl prd)
