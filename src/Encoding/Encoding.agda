@@ -5,7 +5,14 @@ open import Data.Product as Product using (Σ; Σ-syntax; _×_; _,_; proj₁; pr
 open import Data.List.Base as List
 
 import SessionPi as S
-import LinearPi as L
+
+module Encoding where
+
+module L where
+  open import LinearPi.TypeSystem public
+  open import LinearPi.Weakening public
+  open import LinearPi.Substitution public
+
 
 infix 4 !_
 pattern !_ x = _ , x
@@ -26,10 +33,10 @@ mutual
   ⟦ S.chan x ⟧ₑ-type = chan< ⟦ x ⟧ₑ-session >
 
   ⟦_⟧ₑ-session : S.Session → L.Usage × L.Usage × L.Type
-  ⟦ S.end ⟧ₑ-session = L.0∙ , L.0∙ , L.pure ⊤
-  ⟦ S.send T C ⟧ₑ-session = L.0∙ , L.1∙ , L.prod ⟦ T ⟧ₑ-type (encode-cont-flip T C)
-  ⟦ S.recv T C ⟧ₑ-session = L.1∙ , L.0∙ , L.prod ⟦ T ⟧ₑ-type (encode-cont T C)
-  ⟦ S.cont T C ⟧ₑ-session = L.0∙ , L.0∙ , L.prod ⟦ T ⟧ₑ-type (encode-cont T C)
+  ⟦ S.end ⟧ₑ-session = L.#0 , L.#0 , L.pure ⊤
+  ⟦ S.send T C ⟧ₑ-session = L.#0 , L.#1 , L.prod ⟦ T ⟧ₑ-type (encode-cont-flip T C)
+  ⟦ S.recv T C ⟧ₑ-session = L.#1 , L.#0 , L.prod ⟦ T ⟧ₑ-type (encode-cont T C)
+  ⟦ S.cont T C ⟧ₑ-session = L.#0 , L.#0 , L.prod ⟦ T ⟧ₑ-type (encode-cont T C)
 
   ⟦_⟧ₑ-typedvalue : S.TypedValue → L.TypedValue
   ⟦ T , t ⟧ₑ-typedvalue = ⟦ T ⟧ₑ-type , (encode T t)
@@ -78,10 +85,10 @@ postulate ∋ₜ-exhaust : ∀ {xs n zs T t} → xs S.∋ₜ S.at n (S.exhaust (
 
 ∋ₜ-recv : ∀ {xs n zs T C}
         → xs S.∋ₜ S.at n (S.recv T C) ▹ zs
-        → Σ[ ys ∈ L.Ctx ] ⟦ xs ⟧ₑ-ctx L.≔ ys + ⟦ zs ⟧ₑ-ctx × ys L.∋ (L.chan L.1∙ L.0∙ (L.prod ⟦ T ⟧ₑ-type (encode-cont T C)) , tt)
+        → Σ[ ys ∈ L.Ctx ] ⟦ xs ⟧ₑ-ctx L.≔ ys + ⟦ zs ⟧ₑ-ctx × ys L.∋ (L.chan L.#1 L.#0 (L.prod ⟦ T ⟧ₑ-type (encode-cont T C)) , tt)
 ∋ₜ-recv {xs = _ ∷ xs} (S.here (S.chan S.recv))
   with _ , fill , fillnull ← L.+-idˡ ⟦ xs ⟧ₑ-ctx
-  = _ , L.chan L.1∙-left L.0∙ L.∷ fill , L.here fillnull (L.⊆-refl _)
+  = _ , L.chan L.#1-left L.#0 L.∷ fill , L.here fillnull (L.⊆-refl _)
 ∋ₜ-recv {xs = x ∷ _} (S.there n)
   with _ , fill , fillnull ← L.+-idˡ ⟦ x ⟧ₑ-typedvalue
   with _ , spl , var ← ∋ₜ-recv n
@@ -104,13 +111,13 @@ extract (S.there x) = {!!}
 {-
 ∋ₜ-send : ∀ {xs n T C ys zs}
         → xs S.∋ₜ S.at n (S.send T C) ▹ ys
-        → ⟦ ys ⟧ₑ-ctx L.[ n ↦ L.chan L.0∙ L.0∙ (L.prod ⟦ T ⟧ₑ-type (encode-cont-flip T C)), tt ]≔ zs
+        → ⟦ ys ⟧ₑ-ctx L.[ n ↦ L.chan L.#0 L.#0 (L.prod ⟦ T ⟧ₑ-type (encode-cont-flip T C)), tt ]≔ zs
         → Σ[ ms ∈ L.Ctx ]
           ⟦ xs ⟧ₑ-ctx L.≔ ms + zs
-        × L.Term ms (L.chan L.0∙ L.1∙ (L.prod ⟦ T ⟧ₑ-type (encode-cont-flip T C)) , tt)
+        × L.Term ms (L.chan L.#0 L.#1 (L.prod ⟦ T ⟧ₑ-type (encode-cont-flip T C)) , tt)
 ∋ₜ-send {_ ∷ xs} (S.here (S.chan S.send)) L.here
   with ! id , null ← L.+-idˡ ⟦ xs ⟧ₑ-ctx
-  = ! L.chan L.0∙ L.1∙-left L.∷ id , L.var (L.here null (L.chan L.0∙ L.1∙ refl))
+  = ! L.chan L.#0 L.#1-left L.∷ id , L.var (L.here null (L.chan L.#0 L.#1 refl))
 ∋ₜ-send {(T , t) ∷ _} (S.there x) (L.there s)
   with ! id , null ← L.+-idˡ (⟦ T ⟧ₑ-type , encode T t)
   = Product.map _ (Product.map (id L.∷_) (L.Term-lift null)) (∋ₜ-send x s)
