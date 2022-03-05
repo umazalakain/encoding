@@ -106,8 +106,8 @@ data Process : Ctx → Set₁ where
        → zs ∋ₜ at m (cont T t C) ▹ ws
        → Process ws
        → Process xs
-  recv : ∀ {xs n ys T C}
+  recv : ∀ {xs n ys zs T C}
        → xs ∋ₜ at n (recv T C) ▹ ys
-       → ((t : ⟦ T ⟧ₜ) → xs ∋ₜ at n (cont T t C) ▹ ys × Process ((T , t) ∷ ys))
+       → ((t : ⟦ T ⟧ₜ) → ys ∋ₜ at n (cont T t C) ▹ zs × Process ((T , t) ∷ zs))
        → Process xs
 
