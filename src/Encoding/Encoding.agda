@@ -12,6 +12,7 @@ module L where
   open import LinearPi.TypeSystem public
   open import LinearPi.Weakening public
   open import LinearPi.Substitution public
+  open import LinearPi.Exchange public
 
 
 infix 4 !_
@@ -72,13 +73,23 @@ encode-decode : ∀ T {t} → encode T (decode T t) ≡ t
 encode-decode (S.pure x) = refl
 encode-decode (S.chan x) = refl
 
-postulate ⟦_⟧-null : ∀ {xs : S.Ctx}
-                   → S.Null xs
-                   → L.Null ⟦ xs ⟧ₑ-ctx
+⟦_⟧-null-typedvalue : ∀ {x} → S.Null x → L.Null ⟦ x ⟧ₑ-typedvalue
+⟦ S.pure ⟧-null-typedvalue = L.pure
+⟦ S.chan S.end ⟧-null-typedvalue = L.chan L.#0 L.#0
 
-postulate ⟦_⟧-≔-+ : ∀ {xs ys zs}
-                  → xs S.≔ ys + zs
-                  → ⟦ xs ⟧ₑ-ctx L.≔ ⟦ ys ⟧ₑ-ctx + ⟦ zs ⟧ₑ-ctx
+⟦_⟧-null : ∀ {xs : S.Ctx} → S.Null xs → L.Null ⟦ xs ⟧ₑ-ctx
+⟦ S.[] ⟧-null = L.[]
+⟦ n S.∷ ns ⟧-null = ⟦ n ⟧-null-typedvalue L.∷ ⟦ ns ⟧-null
+
+
+⟦_⟧-≔-+-typedvalue : ∀ {x y z} → x S.≔ y + z → ⟦ x ⟧ₑ-typedvalue L.≔ ⟦ y ⟧ₑ-typedvalue + ⟦ z ⟧ₑ-typedvalue
+⟦ S.pure ⟧-≔-+-typedvalue = L.pure
+⟦ S.chan S.left ⟧-≔-+-typedvalue = {!!}
+⟦ S.chan S.right ⟧-≔-+-typedvalue = {!!}
+
+⟦_⟧-≔-+ : ∀ {xs ys zs} → xs S.≔ ys + zs → ⟦ xs ⟧ₑ-ctx L.≔ ⟦ ys ⟧ₑ-ctx + ⟦ zs ⟧ₑ-ctx
+⟦ S.[] ⟧-≔-+ = L.[]
+⟦ spl S.∷ spls ⟧-≔-+ = ⟦ spl ⟧-≔-+-typedvalue L.∷ ⟦ spls ⟧-≔-+
 
 postulate ∋ₜ-exhaust : ∀ {xs n zs T t} → xs S.∋ₜ S.at n (S.exhaust (T , t)) ▹ zs
                      → Σ[ ys ∈ L.Ctx ] ⟦ xs ⟧ₑ-ctx L.≔ ys + ⟦ zs ⟧ₑ-ctx × L.Term ys (⟦ T ⟧ₑ-type , encode T t)
@@ -94,19 +105,15 @@ postulate ∋ₜ-exhaust : ∀ {xs n zs T t} → xs S.∋ₜ S.at n (S.exhaust (
   with _ , spl , var ← ∋ₜ-recv n
   = _ , fill L.∷ spl , L.there fillnull var
 
-precondition : S.Action → S.TypedValue
-precondition (S.exhaust x) = x
-precondition (S.recv T C) = S.chan (S.recv T C) , tt
-precondition (S.send T C) = S.chan (S.send T C) , tt
-precondition (S.cont T t C) = S.chan (S.cont T C) , tt
-precondition (S.at _ α) = precondition α
-
-
-extract : ∀ {xs n α zs}
-        → xs S.∋ₜ S.at n α ▹ zs
-        → Σ[ ys ∈ L.Ctx ] ⟦ xs ⟧ₑ-ctx L.≔ ys + ⟦ zs ⟧ₑ-ctx × L.Term ys ⟦ precondition α ⟧ₑ-typedvalue
-extract (S.here x) = {!!} , {!!} , {!!}
-extract (S.there x) = {!!}
+∋ₜ-cont : ∀ {n T t C zs ys}
+        → ys S.∋ₜ S.at n (S.cont T (decode T t) C) ▹ zs
+        → Σ[ xs ∈ L.Ctx ]
+          L.InsertAt n (L.chan L.#0 L.#0 (L.prod ⟦ T ⟧ₑ-type (encode-cont T C)) , tt) xs ⟦ ys ⟧ₑ-ctx
+        × L.InsertAt n (encode-cont T C t , tt) xs ⟦ zs ⟧ₑ-ctx
+∋ₜ-cont (S.here (S.chan S.cont)) = _ , L.here , L.here
+∋ₜ-cont (S.there ins)
+  with ! ins1 , ins2 ← ∋ₜ-cont ins
+  = _ , L.there ins1 , L.there ins2
 
 {-
 ∋ₜ-send : ∀ {xs n T C ys zs}
@@ -123,18 +130,43 @@ extract (S.there x) = {!!}
   = Product.map _ (Product.map (id L.∷_) (L.Term-lift null)) (∋ₜ-send x s)
   -}
 
-postulate
-  rename : ∀ {Γ Δ Θ s Ψ Ξ}
-         → Γ L.≔ Δ + Θ → Θ L.∋ s
-         → Ψ L.≔ Δ + Ξ → Ξ L.∋ s
-         → L.Process Γ
-         → L.Process Ψ
+module _ where
+  open L
+  data Irrelevant : ∀ {u} → ⟦ u ⟧ᵤ → ⟦ u ⟧ᵤ → Set₁ where
+    pure : ∀ {A a} → Irrelevant (pure A , a) (pure A , a)
+    chan : ∀ {s t} → Irrelevant (chan #0 #0 s , tt) (chan #0 #0 t , tt)
+    prod : ∀ {L1 L2 R1 R2 l1 l2 r1 r2}
+        → Irrelevant (L1 , l1) (L2 , l2)
+        → Irrelevant (R1 l1 , r1) (R2 l2 , r2)
+        → Irrelevant (prod L1 R1 , (l1 , r1)) ((prod L2 R2) , (l2 , r2))
+    []   : Irrelevant {ctx} [] []
+    _∷_  : ∀ {s t ss ts}
+        → Irrelevant {type} s t
+        → Irrelevant {ctx} ss ts
+        → Irrelevant {ctx} (s ∷ ss) (t ∷ ts)
+
+  irrelevant-null : ∀ {xs ys} → Irrelevant xs ys → Null xs → Null ys
+
+  irrelevant-var : ∀ {xs ys s t} → Irrelevant xs ys → Irrelevant s t → xs ∋ s → ys ∋ t
+  irrelevant-var (irrtype1 ∷ irrctx) irrtype (here null sub) = here (irrelevant-null {!!} null) {!!}
+  irrelevant-var irrctx irrtype (there x vr) = {!!}
+
+  irrelevant-term : ∀ {xs ys s t} → Irrelevant xs ys → Irrelevant s t → Term xs s → Term ys t
+
+  irrelevant-proc : ∀ {xs ys} → Irrelevant xs ys → Process xs → Process ys
+  irrelevant-proc irr (end x) = {!!}
+  irrelevant-proc irr (par x proc proc₁) = {!!}
+  irrelevant-proc irr (new i o t proc) = {!!}
+  irrelevant-proc irr (rep x proc) = {!!}
+  irrelevant-proc irr (send x x₁ x₂ x₃ proc) = {!!}
+  irrelevant-proc irr (recv x x₁ x₂) = {!!}
+  irrelevant-proc irr (letprod x x₁ proc) = {!!}
 
 
 mutual
   ⟦_⟧ₚ : ∀ {Γ} → S.Process Γ → L.Process ⟦ Γ ⟧ₑ-ctx
   ⟦ S.end n ⟧ₚ = L.end ⟦ n ⟧-null
-  ⟦ S.par s p q ⟧ₚ = L.par ⟦ s ⟧-≔-+ ⟦ p ⟧ₚ ⟦ q ⟧ₚ
+  ⟦ S.par s p q ⟧ₚ = L.par {!!} ⟦ p ⟧ₚ ⟦ q ⟧ₚ
   ⟦ S.new S p ⟧ₚ =
     let i , o , t = ⟦ S ⟧ₑ-session in
     let î , ô , t̂ = ⟦ S.dual S ⟧ₑ-session in
@@ -166,17 +198,17 @@ mutual
       (L.Process-lift t̂-nright (L.subst-proc (L.chan {!!} {!!} L.∷ {!!}) {!!} {!!} ⟦ p ⟧ₚ) )
   ⟦ S.recv {ys = ys} {T = T} {C = C}s p ⟧ₚ
     =
-    let ! spl , chan = ∋ₜ-recv s in
-    L.recv spl (L.var chan) λ (t , tt) →
+    let ! spl , channel = ∋ₜ-recv s in
+    L.recv spl (L.var channel) λ (t , tt) →
     let var-cont , proc-cont = p (decode T t) in
     let ! left , rightnull = L.+-idʳ ((L.prod ⟦ T ⟧ₑ-type (encode-cont T C) , t , tt)) in
     let ! right , leftnull = L.+-idˡ ⟦ ys ⟧ₑ-ctx in
-    let ! left' , rightnull' = L.+-idʳ (⟦ T ⟧ₑ-type , encode T (decode T t)) in
-    let ! right' , leftnull' = L.+-idˡ (encode-cont T C t , tt) in
+    let ! ins1 , ins2 = ∋ₜ-cont var-cont in
     L.letprod (left L.∷ right) (L.var (L.here leftnull (L.⊆-refl _)))
     $ L.Process-null-insert rightnull (L.there (L.there L.here))
     $ subst (λ ● → L.Process ((⟦ T ⟧ₑ-type , ●) ∷ (encode-cont T C t , tt) ∷ ⟦ ys ⟧ₑ-ctx)) (encode-decode T)
-    $ {!!}
-    -- rename (left' L.∷ {!right'!} L.∷ {!!}) (L.there rightnull' {!!}) (left' L.∷ right' L.∷ L.+-comm right) (L.there rightnull' (L.here leftnull (L.⊆-refl _)))
-    $ L.Process-null-insert leftnull' (L.there L.here)
+    $ L.exchange-proc (L.there (L.there L.here)) (L.there (L.there ins1))
+    $ L.Process-null-insert (L.chan L.#0 L.#0) (L.there (L.there L.here))
+    $ L.exchange-proc (L.there ins2) (L.there L.here)
     $ ⟦ proc-cont ⟧ₚ
+
