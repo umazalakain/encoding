@@ -11,96 +11,82 @@ open import LinearPi.TypeSystem
 module LinearPi.Weakening where
 
 
-repl : Type → ℕ → Type
-repl A zero = pure ⊤
-repl A (suc n) = chan #1 #0 (prod A λ _ → repl A n)
-
 +-comm : ∀ {u} {x y z : ⟦ u ⟧ᵤ} → x ≔ y + z → x ≔ z + y
-+-comm {usage} #0 = #0
-+-comm {usage} #1-left = #1-right
-+-comm {usage} #1-right = #1-left
-+-comm {usage} #ω = #ω
++-comm {chan} ℓ∅ = ℓ∅
++-comm {chan} ℓᵢ-left = ℓᵢ-right
++-comm {chan} ℓᵢ-right = ℓᵢ-left
++-comm {chan} ℓₒ-left = ℓₒ-right
++-comm {chan} ℓₒ-right = ℓₒ-left
++-comm {chan} ℓᵢₒ-left = ℓᵢₒ-right
++-comm {chan} ℓᵢₒ-right = ℓᵢₒ-left
++-comm {chan} ℓᵢₒ = ℓₒᵢ
++-comm {chan} ℓₒᵢ = ℓᵢₒ
++-comm {type} pure = pure
++-comm {type} (chan x) = chan (+-comm x)
 +-comm {type} prod-left = prod-right
 +-comm {type} prod-right = prod-left
-+-comm {type} pure = pure
-+-comm {type} (chan sp sp₁) = chan (+-comm sp) (+-comm sp₁)
 +-comm {ctx} [] = []
-+-comm {ctx} (sp ∷ sp₁) = +-comm sp ∷ +-comm sp₁
++-comm {ctx} (x ∷ xs) = +-comm x ∷ +-comm xs
 
-+-idˡ : ∀ {u} (x : ⟦ u ⟧ᵤ) → Σ[ n ∈ ⟦ u ⟧ᵤ ] x ≔ n + x × Null n
-+-idˡ {usage} #0 = #0 , #0 , #0
-+-idˡ {usage} #1 = #0 , #1-right , #0
-+-idˡ {usage} #ω = #ω , #ω , #ω
-+-idˡ {type} (prod A B , (a , b)) = (pure ⊤ , tt) , prod-right , pure
-+-idˡ {type} (pure A , a) = (pure A , a) , pure , pure
-+-idˡ {type} (chan i o t , tt)
-  with x , spx , nx ← +-idˡ i
-  with y , spy , ny ← +-idˡ o
-  = (chan x y t , tt) , chan spx spy , chan nx ny
-+-idˡ {ctx} [] = [] , [] , []
-+-idˡ {ctx} (x ∷ xs)
-  with ix , spx , nx ← +-idˡ x
-  with ixs , spxs , nxs ← +-idˡ xs
-  = ix ∷ ixs , spx ∷ spxs , nx ∷ nxs
+neutral : ∀ {u} → ⟦ u ⟧ᵤ → ⟦ u ⟧ᵤ
+neutral {chan} x = ℓ∅
+neutral {type} (pure A , a) = pure A , a
+neutral {type} (prod _ _ , _) = pure ⊤ , tt
+neutral {type} (chan x , _) = chan (neutral x) , _
+neutral {ctx} [] = []
+neutral {ctx} (x ∷ xs) = neutral x ∷ neutral xs
 
-+-idʳ : ∀ {u} (x : ⟦ u ⟧ᵤ) → Σ[ n ∈ ⟦ u ⟧ᵤ ] x ≔ x + n × Null n
-+-idʳ x = let a , b , c = +-idˡ x in a , +-comm b , c
+neutral-idempotent : ∀ {u} (x : ⟦ u ⟧ᵤ) → neutral (neutral x) ≡ neutral x
+neutral-idempotent {chan} x = refl
+neutral-idempotent {type} (pure _ , _) = refl
+neutral-idempotent {type} (prod _ _ , _) = refl
+neutral-idempotent {type} (chan _ , _) = refl
+neutral-idempotent {ctx} [] = refl
+neutral-idempotent {ctx} (x ∷ xs) = cong₂ _∷_ (neutral-idempotent x) (neutral-idempotent xs)
 
-⊆-refl : ∀ {u} (x : ⟦ u ⟧ᵤ) → x ⊆ x
-⊆-refl {usage} #0 = #0
-⊆-refl {usage} #1 = #1
-⊆-refl {usage} #ω = #ω
-⊆-refl {type} (pure x , w) = pure
-⊆-refl {type} (prod x y , w) = prod
-⊆-refl {type} (chan i o t , w) = chan (⊆-refl i) (⊆-refl o) refl
-⊆-refl {ctx} [] = []
-⊆-refl {ctx} (x ∷ xs) = ⊆-refl x ∷ ⊆-refl xs
+neutral-null : ∀ {u} (x : ⟦ u ⟧ᵤ) → Null (neutral x)
+neutral-null {chan} x = ℓ∅
+neutral-null {type} (pure _ , _) = pure
+neutral-null {type} (prod _ _ , _) = pure
+neutral-null {type} (chan x , _) = chan (neutral-null x)
+neutral-null {ctx} [] = []
+neutral-null {ctx} (x ∷ xs) = neutral-null x ∷ neutral-null xs
 
-⊆-trans : ∀ {u} {x y z : ⟦ u ⟧ᵤ} → x ⊆ y → y ⊆ z → x ⊆ z
-⊆-trans #0 b = b
-⊆-trans #1 b = b
-⊆-trans prod b = b
-⊆-trans #ω #ω = #ω
-⊆-trans pure b = b
-⊆-trans [] b = b
-⊆-trans (chan ia oa eq) (chan ib ob qe) = chan (⊆-trans ia ib) (⊆-trans oa ob) (trans eq qe)
-⊆-trans (a ∷ as) (b ∷ bs) = ⊆-trans a b ∷ ⊆-trans as bs
 
-⊆-repl : ∀ {A} n {t} → (repl A n , t) ⊆ (repl A n , t)
-⊆-repl zero = pure
-⊆-repl (suc n) = chan #1 #0 refl
++-idˡ : ∀ {u} (x : ⟦ u ⟧ᵤ) → x ≔ neutral x + x
++-idˡ {chan} ℓ∅ = ℓ∅
++-idˡ {chan} (ℓᵢ x) = ℓᵢ-right
++-idˡ {chan} (ℓₒ x) = ℓₒ-right
++-idˡ {chan} (ℓᵢₒ x) = ℓᵢₒ-right
++-idˡ {type} (pure _ , _) = pure
++-idˡ {type} (prod _ _ , _) = prod-right
++-idˡ {type} (chan x , _) = chan (+-idˡ x)
++-idˡ {ctx} [] = []
++-idˡ {ctx} (x ∷ xs) = +-idˡ x ∷ +-idˡ xs
+
+
++-idʳ : ∀ {u} (x : ⟦ u ⟧ᵤ) → x ≔ x + neutral x
++-idʳ x = +-comm (+-idˡ x)
 
 +-cancel : ∀ {u} {a b c : ⟦ u ⟧ᵤ} → a ≔ b + c → Null c → a ≡ b
-+-cancel #0 null = refl
-+-cancel #1-left null = refl
++-cancel ℓ∅ null = refl
++-cancel ℓᵢ-left null = refl
++-cancel ℓₒ-left null = refl
++-cancel ℓᵢₒ-left null = refl
 +-cancel prod-left null = refl
-+-cancel #ω null = refl
 +-cancel pure null = refl
 +-cancel [] null = refl
-+-cancel (chan i o) (chan inull onull) rewrite +-cancel i inull | +-cancel o onull = refl
++-cancel (chan x) (chan null) = cong (λ ● → chan ● , tt) (+-cancel x null)
 +-cancel (spl ∷ spls) (null ∷ nulls) = cong₂ _∷_ (+-cancel spl null) (+-cancel spls nulls)
 
 null-unrestr : ∀ {u} {xs : ⟦ u ⟧ᵤ} → Null xs → xs ≔ xs + xs
 null-unrestr {xs = xs} null
-  with _ , fill , fillnull ← +-idˡ xs
-  with refl ← +-cancel fill null
-  = fill
-
-Null-⊆ : ∀ {u} {x y : ⟦ u ⟧ᵤ} → Null x → x ⊆ y → Null y
-Null-⊆ {usage} n #0 = n
-Null-⊆ {usage} n #ω = #ω
-Null-⊆ {type} n prod = n
-Null-⊆ {type} n pure = n
-Null-⊆ {type} (chan n n₁) (chan sub sub₁ eq) = chan (Null-⊆ n sub) (Null-⊆ n₁ sub₁)
-Null-⊆ {ctx} n [] = n
-Null-⊆ {ctx} (n ∷ n₁) (sub ∷ sub₁) = Null-⊆ n sub ∷ Null-⊆ n₁ sub₁
-
-Null-#0⊆ : {x : Usage} → Null x → #0 ⊆ x
-Null-#0⊆ #0 = #0
-Null-#0⊆ #ω = #ω
+  rewrite +-cancel (+-idˡ xs) null
+  with spl ← +-idˡ (neutral xs)
+  rewrite neutral-idempotent xs = spl
 
 Null-∋ : ∀ {t xs} → Null t → xs ∋ t → Null xs
-Null-∋ n (here n' x) = Null-⊆ n x ∷ n'
+Null-∋ n (here n') = n ∷ n'
 Null-∋ n (there n' x) = n' ∷ Null-∋ n x
 
 Null-Term : ∀ {t xs} → Null t → Term xs t → Null xs
@@ -110,7 +96,6 @@ Null-Term n (pure _ x) = x
 data InsertAt : ℕ → TypedValue → Ctx → Ctx → Set₁ where
   here : ∀ {x xs} → InsertAt zero x xs (x ∷ xs)
   there : ∀ {n x xs ys x'} → InsertAt n x xs ys → InsertAt (suc n) x (x' ∷ xs) (x' ∷ ys)
-
 
 null-insert : ∀ {n x xs ys} → InsertAt n x xs ys → Null x → Null xs → Null ys
 null-insert here nx nxs = nx ∷ nxs
@@ -134,41 +119,36 @@ imtract (spl ∷ spls) spl1 (there ins) =
 
 Var-null-insert : ∀ {x n xs ys t} → Null x → InsertAt n x xs ys → xs ∋ t → ys ∋ t
 Var-null-insert null here vr = there null vr
-Var-null-insert null (there ins) (here null' sub) = here (null-insert ins null null') sub
+Var-null-insert null (there ins) (here null') = here (null-insert ins null null')
 Var-null-insert null (there ins) (there null' vr) = there null' (Var-null-insert null ins vr)
 
 Term-null-insert : ∀ {x n xs ys t} → Null x → InsertAt n x xs ys → Term xs t → Term ys t
 Term-null-insert null ins (var x) = var (Var-null-insert null ins x)
 Term-null-insert null ins (pure a x) = pure a (null-insert ins null x)
 Term-null-insert {x} null ins (pair spl l r)
-  with _ , fill , fillnull ← +-idˡ x
-  with _ , spl1 , insl , insr ← imtract spl fill ins
-  = pair spl1 (Term-null-insert fillnull insl l) (Term-null-insert null insr r)
+  with _ , spl1 , insl , insr ← imtract spl (+-idˡ x) ins
+  = pair spl1 (Term-null-insert (neutral-null x) insl l) (Term-null-insert null insr r)
 
 Process-null-insert : ∀ {x n xs ys} → Null x → InsertAt n x xs ys → Process xs → Process ys
 Process-null-insert null ins (end x) = end (null-insert ins null x)
 Process-null-insert {x} null ins (par spl p q)
-  with _ , fill , fillnull ← +-idˡ x
-  with _ , spl1 , insl , insr ← imtract spl fill ins
-  = par spl1 (Process-null-insert fillnull insl p) (Process-null-insert null insr q)
-Process-null-insert null ins (new i o t proc) = new i o t (Process-null-insert null (there ins) proc)
+  with _ , spl1 , insl , insr ← imtract spl (+-idˡ x) ins
+  = par spl1 (Process-null-insert (neutral-null x) insl p) (Process-null-insert null insr q)
+Process-null-insert null ins (new x proc) = new x (Process-null-insert null (there ins) proc)
 Process-null-insert null ins (rep x proc) = rep (null-insert ins null x) (Process-null-insert null ins proc)
 Process-null-insert {x} null ins (send spl-payload payload spl-channel channel proc)
-  with _ , fill , fillnull ← +-idˡ x
-  with _ , spl1 , insl , insr ← imtract spl-payload fill ins
-  with _ , spl2 , insrl , insrr ← imtract spl-channel fill insr
+  with _ , spl1 , insl , insr ← imtract spl-payload (+-idˡ x) ins
+  with _ , spl2 , insrl , insrr ← imtract spl-channel (+-idˡ x) insr
   = send
-    spl1 (Term-null-insert fillnull insl payload)
-    spl2 (Term-null-insert fillnull insrl channel)
+    spl1 (Term-null-insert (neutral-null x) insl payload)
+    spl2 (Term-null-insert (neutral-null x) insrl channel)
     (Process-null-insert null insrr proc)
 Process-null-insert {x} null ins (recv spl-channel channel cont)
-  with _ , fill , fillnull ← +-idˡ x
-  with _ , spl1 , insl , insr ← imtract spl-channel fill ins
-  = recv spl1 (Term-null-insert fillnull insl channel) (Process-null-insert null (there insr) ∘ cont)
+  with _ , spl1 , insl , insr ← imtract spl-channel (+-idˡ x) ins
+  = recv spl1 (Term-null-insert (neutral-null x) insl channel) (Process-null-insert null (there insr) ∘ cont)
 Process-null-insert {x} null ins (letprod spl-prd prd proc)
-  with _ , fill , fillnull ← +-idˡ x
-  with _ , spl1 , insl , insr ← imtract spl-prd fill ins
-  = letprod spl1 (Term-null-insert fillnull insl prd) (Process-null-insert null (there (there insr)) proc)
+  with _ , spl1 , insl , insr ← imtract spl-prd (+-idˡ x) ins
+  = letprod spl1 (Term-null-insert (neutral-null x) insl prd) (Process-null-insert null (there (there insr)) proc)
 
 
 Term-lift : ∀ {x xs t} → Null x → Term xs t → Term (x ∷ xs) t

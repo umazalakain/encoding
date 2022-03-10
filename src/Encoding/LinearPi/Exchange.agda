@@ -11,13 +11,13 @@ open import LinearPi.Substitution
 
 module LinearPi.Exchange where
 
-insert-var : ∀ {s t xs n ys} → s ⊆ t → Null xs → InsertAt n t xs ys → ys ∋ s
-insert-var sub null here = here null sub
-insert-var sub (xnull ∷ xsnull) (there ins) = there xnull (insert-var sub xsnull ins)
+insert-var : ∀ {t xs n ys} → Null xs → InsertAt n t xs ys → ys ∋ t
+insert-var null here = here null
+insert-var (xnull ∷ xsnull) (there ins) = there xnull (insert-var xsnull ins)
 
 var-insert : ∀ {t n xs ys s} → Null t → InsertAt n t xs ys → xs ∋ s → ys ∋ s
 var-insert null here ni = there null ni
-var-insert null (there ins) (here null1 sub) = here (null-insert ins null null1) sub
+var-insert null (there ins) (here null1) = here (null-insert ins null null1)
 var-insert null (there ins) (there null1 ni) = there null1 (var-insert null ins ni)
 
 exchange-var : ∀ {n t xs ys m zs s}
@@ -26,7 +26,7 @@ exchange-var : ∀ {n t xs ys m zs s}
              → ys ∋ s
              → zs ∋ s
 exchange-var ins1 ins2 vr with occurs? ins1 vr
-exchange-var ins1 ins2 vr | yes null sub = insert-var sub null ins2
+exchange-var ins1 ins2 vr | yes null = insert-var null ins2
 exchange-var ins1 ins2 vr | no null vr2 = var-insert null ins2 vr2
 
 exchange-term : ∀ {n t xs ys m zs s}
@@ -55,8 +55,8 @@ exchange-proc ins1 ins2 (par spl p q) =
   let _ , tspl1 , spl1 , lins1 , rins1 = extract ins1 spl in
   let _ , spl2 , lins2 , rins2 = imtract spl1 tspl1 ins2 in
   par spl2 (exchange-proc lins1 lins2 p) (exchange-proc rins1 rins2 q)
-exchange-proc ins1 ins2 (new i o t p) =
-  new i o t (exchange-proc (there ins1) (there ins2) p)
+exchange-proc ins1 ins2 (new x p) =
+  new x (exchange-proc (there ins1) (there ins2) p)
 exchange-proc ins1 ins2 (rep ys-null p) =
   let t-null , xs-null = insert-null ins1 ys-null in
   rep (null-insert ins2 t-null xs-null) (exchange-proc ins1 ins2 p)
