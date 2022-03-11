@@ -80,7 +80,7 @@ data _∋ₜ_▹_ : ∀ {u} → ⟦ u ⟧ᵤ → Action → ⟦ u ⟧ᵤ → Set
   cont : ∀ {T} {S : ⟦ T ⟧ₜ → Session} {t} → (cont T S) ∋ₜ cont T t S ▹ (S t)
   chan : ∀ {x α x'} → x ∋ₜ α ▹ x' → (chan x , tt) ∋ₜ α ▹ (chan x' , tt)
   exhaust-pure : ∀ {A a} → (pure A , a) ∋ₜ exhaust (pure A , a) ▹ (pure A , a)
-  exhaust-chan : ∀ {x} → (chan x , tt) ∋ₜ exhaust (chan x , tt) ▹ (pure ⊤ , tt)
+  exhaust-chan : ∀ {x} → (chan x , tt) ∋ₜ exhaust (chan x , tt) ▹ (chan end , tt)
   here : ∀ {x xs α x'}
        → _∋ₜ_▹_ {type} x α x'
        → _∋ₜ_▹_ {ctx} (x ∷ xs) (at zero α) (x' ∷ xs)

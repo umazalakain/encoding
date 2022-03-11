@@ -59,12 +59,6 @@ mutual
   encode-cont-flip : (T : S.Type) (C : S.⟦ T ⟧ₜ → S.Session) → (L.⟦ ⟦ T ⟧ₑ-type ⟧ₜ → L.Type)
   encode-cont-flip T C = L.chan ∘ flip-chan ∘ ⟦_⟧ₑ-session ∘ C ∘ decode T
 
-flip-dual : ∀ S → ⟦ S.dual S ⟧ₑ-session ≡ flip-chan ⟦ S ⟧ₑ-session
-flip-dual S.end = refl
-flip-dual (S.recv T C) = cong L.ℓₒ (cong (L.prod _) {!!})
-flip-dual (S.send T x) = cong L.ℓᵢ (cong (L.prod _) {!!})
-flip-dual (S.cont T x) = refl
-
 decode-encode : ∀ T {t} → decode T (encode T t) ≡ t
 decode-encode (S.pure x) = refl
 decode-encode (S.chan x) = refl
@@ -91,8 +85,13 @@ encode-decode (S.chan x) = refl
 ⟦ S.[] ⟧-≔-+ = L.[]
 ⟦ spl S.∷ spls ⟧-≔-+ = ⟦ spl ⟧-≔-+-typedvalue L.∷ ⟦ spls ⟧-≔-+
 
-postulate ∋ₜ-exhaust : ∀ {xs n zs T t} → xs S.∋ₜ S.at n (S.exhaust (T , t)) ▹ zs
-                     → Σ[ ys ∈ L.Ctx ] ⟦ xs ⟧ₑ-ctx L.≔ ys + ⟦ zs ⟧ₑ-ctx × L.Term ys (⟦ T ⟧ₑ-type , encode T t)
+∋ₜ-exhaust : ∀ {xs n zs T t} → xs S.∋ₜ S.at n (S.exhaust (T , t)) ▹ zs
+           → Σ[ ys ∈ L.Ctx ] ⟦ xs ⟧ₑ-ctx L.≔ ys + ⟦ zs ⟧ₑ-ctx × ys L.∋ (⟦ T ⟧ₑ-type , encode T t)
+∋ₜ-exhaust (S.here S.exhaust-pure) = _ , L.+-idʳ _ L.∷ L.+-idˡ _ , L.here (L.neutral-null _)
+∋ₜ-exhaust (S.here S.exhaust-chan) = _ , L.+-idʳ _ L.∷ L.+-idˡ _ , L.here (L.neutral-null _)
+∋ₜ-exhaust (S.there x)
+  with _ , spl , x' ← ∋ₜ-exhaust x
+  = _ , L.+-idˡ _ L.∷ spl , L.there (L.neutral-null _) x'
 
 ∋ₜ-recv : ∀ {xs n zs T C}
         → xs S.∋ₜ S.at n (S.recv T C) ▹ zs
@@ -101,6 +100,16 @@ postulate ∋ₜ-exhaust : ∀ {xs n zs T t} → xs S.∋ₜ S.at n (S.exhaust (
 ∋ₜ-recv {xs = x ∷ _} (S.there n)
   with _ , spl , var ← ∋ₜ-recv n
   = _ , L.+-idˡ _ L.∷ spl , L.there (L.neutral-null _) var
+
+
+∋ₜ-send : ∀ {xs n zs T C}
+        → xs S.∋ₜ S.at n (S.send T C) ▹ zs
+        → Σ[ ys ∈ L.Ctx ] ⟦ xs ⟧ₑ-ctx L.≔ ys + ⟦ zs ⟧ₑ-ctx × ys L.∋ (L.chan (L.ℓₒ (L.prod ⟦ T ⟧ₑ-type (encode-cont-flip T C))) , tt)
+∋ₜ-send {xs = _ ∷ xs} (S.here (S.chan S.send)) = _ , L.chan (L.+-idʳ _) L.∷ L.+-idˡ _ , L.here (L.neutral-null _)
+∋ₜ-send {xs = x ∷ _} (S.there n)
+  with _ , spl , var ← ∋ₜ-send n
+  = _ , L.+-idˡ _ L.∷ spl , L.there (L.neutral-null _) var
+
 
 ∋ₜ-cont : ∀ {n T t C zs ys}
         → ys S.∋ₜ S.at n (S.cont T (decode T t) C) ▹ zs
@@ -112,20 +121,6 @@ postulate ∋ₜ-exhaust : ∀ {xs n zs T t} → xs S.∋ₜ S.at n (S.exhaust (
   with ! ins1 , ins2 ← ∋ₜ-cont ins
   = _ , L.there ins1 , L.there ins2
 
-{-
-∋ₜ-send : ∀ {xs n T C ys zs}
-        → xs S.∋ₜ S.at n (S.send T C) ▹ ys
-        → ⟦ ys ⟧ₑ-ctx L.[ n ↦ L.chan L.#0 L.#0 (L.prod ⟦ T ⟧ₑ-type (encode-cont-flip T C)), tt ]≔ zs
-        → Σ[ ms ∈ L.Ctx ]
-          ⟦ xs ⟧ₑ-ctx L.≔ ms + zs
-        × L.Term ms (L.chan L.#0 L.#1 (L.prod ⟦ T ⟧ₑ-type (encode-cont-flip T C)) , tt)
-∋ₜ-send {_ ∷ xs} (S.here (S.chan S.send)) L.here
-  with ! id , null ← L.+-idˡ ⟦ xs ⟧ₑ-ctx
-  = ! L.chan L.#0 L.#1-left L.∷ id , L.var (L.here null (L.chan L.#0 L.#1 refl))
-∋ₜ-send {(T , t) ∷ _} (S.there x) (L.there s)
-  with ! id , null ← L.+-idˡ (⟦ T ⟧ₑ-type , encode T t)
-  = Product.map _ (Product.map (id L.∷_) (L.Term-lift null)) (∋ₜ-send x s)
-  -}
 
 
 mutual
@@ -134,33 +129,27 @@ mutual
   ⟦ S.par s p q ⟧ₚ = L.par ⟦ s ⟧-≔-+ ⟦ p ⟧ₚ ⟦ q ⟧ₚ
   ⟦ S.new S p ⟧ₚ = L.new ⟦ S.dual S ⟧ₑ-session (L.new ⟦ S ⟧ₑ-session ⟦ p ⟧ₚ)
   ⟦ S.rep n p ⟧ₚ = L.rep ⟦ n ⟧-null ⟦ p ⟧ₚ
-  ⟦ S.send {T = T} {t = t} {C = C} v s c p ⟧ₚ
-    with SC ← ⟦ C t ⟧ₑ-session in eq
-    with Δ , spv , tv ← ∋ₜ-exhaust v
-    -- with ! spc , tc ← {!∋ₜ-send s {!!}!}
-    -- with ! spp , np ← L.+-idʳ Δ
-    -- with a , t-right , t-nleft ← L.+-idˡ (L.chan SC , tt)
-    -- with b , t̂-left , t̂-nright ← L.+-idʳ (L.chan (flip-chan SC) , tt)
-    -- with ! t̂-right , t̂-nleft ← L.+-idˡ (L.chan (flip-chan SC) , tt)
-    -- with ! a-right , a-nleft ← L.+-idˡ a
-    -- with ! b-right , b-nleft ← L.+-idˡ b
-    -- with ! Δ-left , Δ-null ← L.+-idʳ Δ
-    = L.new {!!} -- ci co ct
-    $ L.new {!!} -- co ci ct
-    $ {!!}
-    {-
+  ⟦ S.send {T = T} {t = t} {C = C} v s c p ⟧ₚ =
+    let SC = ⟦ C t ⟧ₑ-session in
+    let ! spv , tv = ∋ₜ-exhaust v in
+    let ! spc , ch = ∋ₜ-send s in
+    let Δ , ins1 , ins2 = ∋ₜ-cont (subst (λ ● → _ S.∋ₜ S.at _ (S.cont T ● C) ▹ _) (sym (decode-encode T)) c) in
+    let foo = subst (λ ● → _ L.≔ L.neutral (L.chan (flip-chan ⟦ C t ⟧ₑ-session) , tt) + (L.chan (flip-chan ⟦ C ● ⟧ₑ-session) , tt) ) (sym (decode-encode T)) (L.+-idˡ _) in
+    let bar = subst (λ ● → L.InsertAt _ (L.chan ⟦ C ● ⟧ₑ-session , tt) Δ (_ ∷ Δ)) (sym (decode-encode T)) L.here in
+    L.new SC
+    $ L.new (flip-chan SC)
     $ L.send
-      (t̂-left L.∷ t-right  L.∷ spv)
-      (L.pair (t̂-right L.∷ a-right L.∷ Δ-left)
-              (L.Term-lift t̂-nleft (L.Term-lift a-nleft tv))
-              (L.var (L.here (t-nleft L.∷ Δ-null) (L.chan
-                (subst (λ ● → proj₁ (proj₂ (⟦ C ● ⟧ₑ-session)) L.⊆ co) (sym (decode-encode T {t})) (subst (L._⊆ co) (cong (proj₁ ∘ proj₂) (sym eq)) (L.⊆-refl _)))
-                (subst (λ ● → proj₁ (⟦ C ● ⟧ₑ-session) L.⊆ ci)         (sym (decode-encode T {t})) (subst (L._⊆ ci) (cong (proj₁)         (sym eq)) (L.⊆-refl _)))
-                (trans (cong (λ ● → proj₂ (proj₂ ⟦ C ● ⟧ₑ-session)) (decode-encode T {t})) (cong (proj₂ ∘ proj₂) eq))))))
-      (b-right L.∷ t-right L.∷ {!spc!})
-      (L.Term-lift b-nleft (L.Term-lift t-nleft {!tc!}))
-      (L.Process-lift t̂-nright (L.subst-proc (L.chan {!!} {!!} L.∷ {!!}) {!!} {!!} ⟦ p ⟧ₚ) )
-      -}
+      (L.+-idʳ _ L.∷ L.+-idˡ _ L.∷ spv)
+        (L.pair (foo L.∷ L.+-idˡ _ L.∷ L.+-idʳ _)
+                (L.Term-lift (L.chan L.ℓ∅) (L.Term-lift (L.chan L.ℓ∅) (L.var tv)))
+                (L.var (L.here (L.chan L.ℓ∅ L.∷ L.neutral-null _))))
+      (L.+-idˡ _ L.∷ L.+-idˡ _ L.∷ spc)
+        (L.Term-lift (L.chan L.ℓ∅) (L.Term-lift (L.chan L.ℓ∅) (L.var ch)))
+    $ L.exchange-proc L.here (L.there (L.there ins1))
+    $ L.exchange-proc (L.there (L.there ins2)) (L.there (L.there bar))
+    $ L.Process-null-insert (L.chan L.ℓ∅) L.here
+    $ L.Process-null-insert (L.chan L.ℓ∅) L.here
+    $ ⟦ p ⟧ₚ
   ⟦ S.recv {ys = ys} {T = T} {C = C}s p ⟧ₚ
     =
     let ! spl , channel = ∋ₜ-recv s in
