@@ -7,7 +7,7 @@ open import Data.Product using (Σ; Σ-syntax; _×_; _,_)
 mutual
   data Type : Set₁ where
     pure : Set → Type
-    chan : Session → Type
+    sesh : Session → Type
 
   data Session : Set₁ where
     end : Session
@@ -17,7 +17,7 @@ mutual
 
   ⟦_⟧ₜ : Type → Set
   ⟦ pure A ⟧ₜ = A
-  ⟦ chan _ ⟧ₜ = ⊤
+  ⟦ sesh _ ⟧ₜ = ⊤
 
 dual : Session → Session
 dual end = end
@@ -47,9 +47,9 @@ data _≔_+_ : ∀ {u} → ⟦ u ⟧ᵤ → ⟦ u ⟧ᵤ → ⟦ u ⟧ᵤ → Se
   right : {S : Session} → S ≔ end + S
 
   pure : ∀ {A a} → (pure A , a) ≔ (pure A , a) + (pure A , a)
-  chan : {x y z : Session}
+  sesh : {x y z : Session}
        → x ≔ y + z
-       → (chan x , tt) ≔ (chan y , tt) + (chan z , tt)
+       → (sesh x , tt) ≔ (sesh y , tt) + (sesh z , tt)
 
   [] : _≔_+_ {ctx} [] [] []
   _∷_ : {x y z : TypedValue} {xs ys zs : Ctx}
@@ -61,7 +61,7 @@ data _≔_+_ : ∀ {u} → ⟦ u ⟧ᵤ → ⟦ u ⟧ᵤ → ⟦ u ⟧ᵤ → Se
 data Null : ∀ {u} → ⟦ u ⟧ᵤ → Set₁ where
   end : Null {session} end
   pure : ∀ {A a} → Null (pure A , a)
-  chan : ∀ {x} → Null x → Null (chan x , tt)
+  sesh : ∀ {x} → Null x → Null (sesh x , tt)
   [] : Null {ctx} []
   _∷_ : {x : TypedValue} {xs : Ctx} → Null x → Null xs → Null {ctx} (x ∷ xs)
 
@@ -78,9 +78,9 @@ data _∋ₜ_▹_ : ∀ {u} → ⟦ u ⟧ᵤ → Action → ⟦ u ⟧ᵤ → Set
   recv : ∀ {T} {S : ⟦ T ⟧ₜ → Session} → _∋ₜ_▹_ {session} (recv T S) (recv T S) (cont T S)
   send : ∀ {T} {S : ⟦ T ⟧ₜ → Session} → _∋ₜ_▹_ {session} (send T S) (send T S) (cont T S)
   cont : ∀ {T} {S : ⟦ T ⟧ₜ → Session} {t} → (cont T S) ∋ₜ cont T t S ▹ (S t)
-  chan : ∀ {x α x'} → x ∋ₜ α ▹ x' → (chan x , tt) ∋ₜ α ▹ (chan x' , tt)
+  sesh : ∀ {x α x'} → x ∋ₜ α ▹ x' → (sesh x , tt) ∋ₜ α ▹ (sesh x' , tt)
   exhaust-pure : ∀ {A a} → (pure A , a) ∋ₜ exhaust (pure A , a) ▹ (pure A , a)
-  exhaust-chan : ∀ {x} → (chan x , tt) ∋ₜ exhaust (chan x , tt) ▹ (chan end , tt)
+  exhaust-sesh : ∀ {x} → (sesh x , tt) ∋ₜ exhaust (sesh x , tt) ▹ (sesh end , tt)
   here : ∀ {x xs α x'}
        → _∋ₜ_▹_ {type} x α x'
        → _∋ₜ_▹_ {ctx} (x ∷ xs) (at zero α) (x' ∷ xs)
@@ -97,7 +97,7 @@ data Process : Ctx → Set₁ where
       → Process zs
       → Process xs
   new : ∀ {xs} S
-      → Process ((chan S , tt) ∷ (chan (dual S) , tt) ∷ xs)
+      → Process ((sesh S , tt) ∷ (sesh (dual S) , tt) ∷ xs)
       → Process xs
   rep : ∀ {xs} → Null xs → Process xs → Process xs
   send : ∀ {xs n ys m zs ws T t C}

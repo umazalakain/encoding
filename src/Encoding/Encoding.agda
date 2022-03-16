@@ -31,7 +31,7 @@ flip-chan (L.ℓᵢₒ x) = L.ℓᵢₒ x
 mutual
   ⟦_⟧ₑ-type : S.Type → L.Type
   ⟦ S.pure x ⟧ₑ-type = L.pure x
-  ⟦ S.chan x ⟧ₑ-type = L.chan ⟦ x ⟧ₑ-session
+  ⟦ S.sesh x ⟧ₑ-type = L.chan ⟦ x ⟧ₑ-session
 
   ⟦_⟧ₑ-session : S.Session → L.Channel
   ⟦ S.end ⟧ₑ-session = L.ℓ∅
@@ -47,11 +47,11 @@ mutual
 
   decode : ∀ T → L.⟦ ⟦ T ⟧ₑ-type ⟧ₜ → S.⟦ T ⟧ₜ
   decode (S.pure A) x = x
-  decode (S.chan _) _ = tt
+  decode (S.sesh _) _ = tt
 
   encode : ∀ T → S.⟦ T ⟧ₜ → L.⟦ ⟦ T ⟧ₑ-type ⟧ₜ
   encode (S.pure A) x = x
-  encode (S.chan _) _ = tt
+  encode (S.sesh _) _ = tt
 
   encode-cont : (T : S.Type) (C : S.⟦ T ⟧ₜ → S.Session) → (L.⟦ ⟦ T ⟧ₑ-type ⟧ₜ → L.Type)
   encode-cont T C = L.chan ∘ ⟦_⟧ₑ-session ∘ C ∘ decode T
@@ -61,15 +61,15 @@ mutual
 
 decode-encode : ∀ T {t} → decode T (encode T t) ≡ t
 decode-encode (S.pure x) = refl
-decode-encode (S.chan x) = refl
+decode-encode (S.sesh x) = refl
 
 encode-decode : ∀ T {t} → encode T (decode T t) ≡ t
 encode-decode (S.pure x) = refl
-encode-decode (S.chan x) = refl
+encode-decode (S.sesh x) = refl
 
 ⟦_⟧-null-typedvalue : ∀ {x} → S.Null x → L.Null ⟦ x ⟧ₑ-typedvalue
 ⟦ S.pure ⟧-null-typedvalue = L.pure
-⟦ S.chan S.end ⟧-null-typedvalue = L.chan L.ℓ∅
+⟦ S.sesh S.end ⟧-null-typedvalue = L.chan L.ℓ∅
 
 ⟦_⟧-null : ∀ {xs : S.Ctx} → S.Null xs → L.Null ⟦ xs ⟧ₑ-ctx
 ⟦ S.[] ⟧-null = L.[]
@@ -78,8 +78,8 @@ encode-decode (S.chan x) = refl
 
 ⟦_⟧-≔-+-typedvalue : ∀ {x y z} → x S.≔ y + z → ⟦ x ⟧ₑ-typedvalue L.≔ ⟦ y ⟧ₑ-typedvalue + ⟦ z ⟧ₑ-typedvalue
 ⟦ S.pure ⟧-≔-+-typedvalue = L.pure
-⟦ S.chan S.left ⟧-≔-+-typedvalue = L.chan (L.+-idʳ _)
-⟦ S.chan S.right ⟧-≔-+-typedvalue = L.chan (L.+-idˡ _)
+⟦ S.sesh S.left ⟧-≔-+-typedvalue = L.chan (L.+-idʳ _)
+⟦ S.sesh S.right ⟧-≔-+-typedvalue = L.chan (L.+-idˡ _)
 
 ⟦_⟧-≔-+ : ∀ {xs ys zs} → xs S.≔ ys + zs → ⟦ xs ⟧ₑ-ctx L.≔ ⟦ ys ⟧ₑ-ctx + ⟦ zs ⟧ₑ-ctx
 ⟦ S.[] ⟧-≔-+ = L.[]
@@ -88,7 +88,7 @@ encode-decode (S.chan x) = refl
 ∋ₜ-exhaust : ∀ {xs n zs T t} → xs S.∋ₜ S.at n (S.exhaust (T , t)) ▹ zs
            → Σ[ ys ∈ L.Ctx ] ⟦ xs ⟧ₑ-ctx L.≔ ys + ⟦ zs ⟧ₑ-ctx × ys L.∋ (⟦ T ⟧ₑ-type , encode T t)
 ∋ₜ-exhaust (S.here S.exhaust-pure) = _ , L.+-idʳ _ L.∷ L.+-idˡ _ , L.here (L.neutral-null _)
-∋ₜ-exhaust (S.here S.exhaust-chan) = _ , L.+-idʳ _ L.∷ L.+-idˡ _ , L.here (L.neutral-null _)
+∋ₜ-exhaust (S.here S.exhaust-sesh) = _ , L.+-idʳ _ L.∷ L.+-idˡ _ , L.here (L.neutral-null _)
 ∋ₜ-exhaust (S.there x)
   with _ , spl , x' ← ∋ₜ-exhaust x
   = _ , L.+-idˡ _ L.∷ spl , L.there (L.neutral-null _) x'
@@ -96,7 +96,7 @@ encode-decode (S.chan x) = refl
 ∋ₜ-recv : ∀ {xs n zs T C}
         → xs S.∋ₜ S.at n (S.recv T C) ▹ zs
         → Σ[ ys ∈ L.Ctx ] ⟦ xs ⟧ₑ-ctx L.≔ ys + ⟦ zs ⟧ₑ-ctx × ys L.∋ (L.chan (L.ℓᵢ (L.prod ⟦ T ⟧ₑ-type (encode-cont T C))) , tt)
-∋ₜ-recv {xs = _ ∷ xs} (S.here (S.chan S.recv)) = _ , L.chan (L.+-idʳ _) L.∷ L.+-idˡ _ , L.here (L.neutral-null _)
+∋ₜ-recv {xs = _ ∷ xs} (S.here (S.sesh S.recv)) = _ , L.chan (L.+-idʳ _) L.∷ L.+-idˡ _ , L.here (L.neutral-null _)
 ∋ₜ-recv {xs = x ∷ _} (S.there n)
   with _ , spl , var ← ∋ₜ-recv n
   = _ , L.+-idˡ _ L.∷ spl , L.there (L.neutral-null _) var
@@ -105,7 +105,7 @@ encode-decode (S.chan x) = refl
 ∋ₜ-send : ∀ {xs n zs T C}
         → xs S.∋ₜ S.at n (S.send T C) ▹ zs
         → Σ[ ys ∈ L.Ctx ] ⟦ xs ⟧ₑ-ctx L.≔ ys + ⟦ zs ⟧ₑ-ctx × ys L.∋ (L.chan (L.ℓₒ (L.prod ⟦ T ⟧ₑ-type (encode-cont-flip T C))) , tt)
-∋ₜ-send {xs = _ ∷ xs} (S.here (S.chan S.send)) = _ , L.chan (L.+-idʳ _) L.∷ L.+-idˡ _ , L.here (L.neutral-null _)
+∋ₜ-send {xs = _ ∷ xs} (S.here (S.sesh S.send)) = _ , L.chan (L.+-idʳ _) L.∷ L.+-idˡ _ , L.here (L.neutral-null _)
 ∋ₜ-send {xs = x ∷ _} (S.there n)
   with _ , spl , var ← ∋ₜ-send n
   = _ , L.+-idˡ _ L.∷ spl , L.there (L.neutral-null _) var
@@ -116,7 +116,7 @@ encode-decode (S.chan x) = refl
         → Σ[ xs ∈ L.Ctx ]
           L.InsertAt n (L.chan L.ℓ∅ , tt) xs ⟦ ys ⟧ₑ-ctx
         × L.InsertAt n (encode-cont T C t , tt) xs ⟦ zs ⟧ₑ-ctx
-∋ₜ-cont (S.here (S.chan S.cont)) = _ , L.here , L.here
+∋ₜ-cont (S.here (S.sesh S.cont)) = _ , L.here , L.here
 ∋ₜ-cont (S.there ins)
   with ! ins1 , ins2 ← ∋ₜ-cont ins
   = _ , L.there ins1 , L.there ins2
