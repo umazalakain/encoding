@@ -8,6 +8,7 @@ mutual
   data Type : Set₁ where
     pure : Set → Type
     sesh : Session → Type
+    chan : Type → Type
 
   data Session : Set₁ where
     end : Session
@@ -18,6 +19,7 @@ mutual
   ⟦_⟧ₜ : Type → Set
   ⟦ pure A ⟧ₜ = A
   ⟦ sesh _ ⟧ₜ = ⊤
+  ⟦ chan _ ⟧ₜ = ⊤
 
 dual : Session → Session
 dual end = end
@@ -43,13 +45,10 @@ data Univ : Set where
 ⟦ ctx ⟧ᵤ = Ctx
 
 data _≔_+_ : ∀ {u} → ⟦ u ⟧ᵤ → ⟦ u ⟧ᵤ → ⟦ u ⟧ᵤ → Set where
-  left : {S : Session} → S ≔ S + end
-  right : {S : Session} → S ≔ end + S
-
   pure : ∀ {A a} → (pure A , a) ≔ (pure A , a) + (pure A , a)
-  sesh : {x y z : Session}
-       → x ≔ y + z
-       → (sesh x , tt) ≔ (sesh y , tt) + (sesh z , tt)
+  chan : ∀ {x} → (chan x , tt) ≔ (chan x , tt) + (chan x , tt)
+  sesh-left : {S : Session} → (sesh S , tt) ≔ (sesh S , tt) + (sesh end , tt)
+  sesh-right : {S : Session} → (sesh S , tt) ≔ (sesh end , tt) + (sesh S , tt)
 
   [] : _≔_+_ {ctx} [] [] []
   _∷_ : {x y z : TypedValue} {xs ys zs : Ctx}
@@ -59,34 +58,39 @@ data _≔_+_ : ∀ {u} → ⟦ u ⟧ᵤ → ⟦ u ⟧ᵤ → ⟦ u ⟧ᵤ → Se
 
 
 data Null : ∀ {u} → ⟦ u ⟧ᵤ → Set₁ where
-  end : Null {session} end
   pure : ∀ {A a} → Null (pure A , a)
-  sesh : ∀ {x} → Null x → Null (sesh x , tt)
+  chan : ∀ {x} → Null (chan x , tt)
+  sesh-end : Null (sesh end , tt)
   [] : Null {ctx} []
   _∷_ : {x : TypedValue} {xs : Ctx} → Null x → Null xs → Null {ctx} (x ∷ xs)
 
 
 data Action : Set₁ where
   at : ℕ → Action → Action
-  exhaust : TypedValue → Action
-  recv : (T : Type) (C : ⟦ T ⟧ₜ → Session) → Action
-  send : (T : Type) (C : ⟦ T ⟧ₜ → Session) → Action
-  cont : (T : Type) (t : ⟦ T ⟧ₜ) (C : ⟦ T ⟧ₜ → Session) → Action
+  recv send payload : (T : Type) (t : ⟦ T ⟧ₜ) → Action
 
 
 data _∋ₜ_▹_ : ∀ {u} → ⟦ u ⟧ᵤ → Action → ⟦ u ⟧ᵤ → Set₁ where
-  recv : ∀ {T} {S : ⟦ T ⟧ₜ → Session} → _∋ₜ_▹_ {session} (recv T S) (recv T S) (cont T S)
-  send : ∀ {T} {S : ⟦ T ⟧ₜ → Session} → _∋ₜ_▹_ {session} (send T S) (send T S) (cont T S)
-  cont : ∀ {T} {S : ⟦ T ⟧ₜ → Session} {t} → (cont T S) ∋ₜ cont T t S ▹ (S t)
-  sesh : ∀ {x α x'} → x ∋ₜ α ▹ x' → (sesh x , tt) ∋ₜ α ▹ (sesh x' , tt)
-  exhaust-pure : ∀ {A a} → (pure A , a) ∋ₜ exhaust (pure A , a) ▹ (pure A , a)
-  exhaust-sesh : ∀ {x} → (sesh x , tt) ∋ₜ exhaust (sesh x , tt) ▹ (sesh end , tt)
+  recv-sesh : ∀ {T t} {C : ⟦ T ⟧ₜ → Session} → (sesh (recv T C) , tt) ∋ₜ recv T t ▹ (sesh (C t) , tt)
+  send-sesh : ∀ {T t} {C : ⟦ T ⟧ₜ → Session} → (sesh (send T C) , tt) ∋ₜ send T t ▹ (sesh (C t) , tt)
+  recv-chan : ∀ {T t} → (chan T , tt) ∋ₜ recv T t ▹ (chan T , tt)
+  send-chan : ∀ {T t} → (chan T , tt) ∋ₜ send T t ▹ (chan T , tt)
+
+  payload-pure : ∀ A a → (pure A , a) ∋ₜ payload (pure A) a ▹ (pure A , a)
+  payload-sesh : ∀ {x} → (sesh x , tt) ∋ₜ payload (sesh x) tt ▹ (sesh end , tt)
+  payload-chan : ∀ {x} → (chan x , tt) ∋ₜ payload (chan x) tt ▹ (chan x , tt)
+
   here : ∀ {x xs α x'}
        → _∋ₜ_▹_ {type} x α x'
        → _∋ₜ_▹_ {ctx} (x ∷ xs) (at zero α) (x' ∷ xs)
   there : ∀ {x' xs xs' n α}
         → _∋ₜ_▹_ {ctx} xs (at n α) xs'
         → _∋ₜ_▹_ {ctx} (x' ∷ xs) (at (suc n) α) (x' ∷ xs')
+
+
+data New : TypedValue → TypedValue → Set where
+  chan : ∀ t → New (chan t , tt) (chan t , tt)
+  sesh : ∀ s → New (sesh s , tt) (sesh (dual s) , tt)
 
 
 data Process : Ctx → Set₁ where
@@ -96,18 +100,17 @@ data Process : Ctx → Set₁ where
       → Process ys
       → Process zs
       → Process xs
-  new : ∀ {xs} S
-      → Process ((sesh S , tt) ∷ (sesh (dual S) , tt) ∷ xs)
+  new : ∀ {xs} {S T}
+      → New S T
+      → Process (S ∷ T ∷ xs)
       → Process xs
   rep : ∀ {xs} → Null xs → Process xs → Process xs
-  send : ∀ {xs n ys m zs ws T t C}
-       → xs ∋ₜ at n (exhaust (T , t)) ▹ ys
-       → ys ∋ₜ at m (send T C) ▹ zs
-       → zs ∋ₜ at m (cont T t C) ▹ ws
+  send : ∀ {xs n ys m zs ws T t}
+       → xs ∋ₜ at n (payload T t) ▹ ys
+       → ys ∋ₜ at m (send T t) ▹ zs
        → Process ws
        → Process xs
-  recv : ∀ {xs n ys zs T C}
-       → xs ∋ₜ at n (recv T C) ▹ ys
-       → ((t : ⟦ T ⟧ₜ) → ys ∋ₜ at n (cont T t C) ▹ zs × Process ((T , t) ∷ zs))
+  recv : ∀ {xs ys T}
+       → (n : ℕ)
+       → ((t : ⟦ T ⟧ₜ) → xs ∋ₜ at n (recv T t) ▹ ys × Process ((T , t) ∷ ys))
        → Process xs
-
