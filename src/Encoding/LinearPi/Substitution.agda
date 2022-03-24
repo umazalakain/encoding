@@ -137,7 +137,8 @@ subst-proc spl term ins (end ws-null)
 subst-proc spl term ins (par spl1 p q) 
   with _ , spl' , lspl' , rspl' , lterm , rterm , insl , insr ← redistribute spl1 ins spl term
   = par spl' (subst-proc lspl' lterm insl p) (subst-proc rspl' rterm insr q)
-subst-proc spl term ins (new (line t) p) = new (line t) (subst-proc (line (+-idˡ _) ∷ spl) (Term-lift (line ℓ∅) term) (there ins) p)
+subst-proc spl term ins (new ∅ p) = new ∅ (subst-proc (line (+-idˡ _) ∷ spl) (Term-lift (line ℓ∅) term) (there ins) p)
+subst-proc spl term ins (new (ᵢₒ t) p) = new (ᵢₒ t) (subst-proc (line (+-idˡ _) ∷ spl) (Term-lift (line ℓ∅) term) (there ins) p)
 subst-proc spl term ins (new (unre t) p) = new (unre t) (subst-proc (unre ∷ spl) (Term-lift unre term) (there ins) p)
 subst-proc spl term ins (rep ws-null p)
   with t-null , zs-null ← insert-null ins ws-null

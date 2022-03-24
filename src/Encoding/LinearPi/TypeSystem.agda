@@ -102,7 +102,8 @@ data Term : Ctx → TypedValue → Set₁ where
 
 
 data New : TypedValue → Set₁ where
-  line : ∀ t → New (line (ℓᵢₒ t) , tt)
+  ∅ : New (line ℓ∅ , tt)
+  ᵢₒ : ∀ t → New (line (ℓᵢₒ t) , tt)
   unre : ∀ t → New (unre t , tt)
 
 data Process : Ctx → Set₁ where
