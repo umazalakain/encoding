@@ -14,29 +14,30 @@ module LinearPi.Substitution where
 
 
 reorient : ∀ {u} {xs ys zs as bs ps qs : ⟦ u ⟧ᵤ} → xs ≔ ys + zs → ys ≔ ps + qs → zs ≔ as + bs → Σ[ (ys' , zs') ∈ ⟦ u ⟧ᵤ × ⟦ u ⟧ᵤ ] xs ≔ ys' + zs' × ys' ≔ ps + as × zs' ≔ qs + bs
-reorient {chan} ℓ∅ ℓ∅ ℓ∅ = _ , ℓ∅ , ℓ∅ , ℓ∅
-reorient {chan} ℓᵢ-left spl2 ℓ∅ = _ , spl2 , +-idʳ _ , +-idʳ _
-reorient {chan} ℓᵢ-right ℓ∅ spl3 = _ , spl3 , +-idˡ _ , +-idˡ _
-reorient {chan} ℓₒ-left spl2 ℓ∅ = _ , spl2 , +-idʳ _ , +-idʳ _
-reorient {chan} ℓₒ-right ℓ∅ spl3 = _ , spl3 , +-idˡ _ , +-idˡ _
-reorient {chan} ℓᵢₒ-left spl2 ℓ∅ = _ , spl2 , +-idʳ _ , +-idʳ _
-reorient {chan} ℓᵢₒ-right ℓ∅ spl3 = _ , spl3 , +-idˡ _ , +-idˡ _
-reorient {chan} ℓᵢₒ ℓᵢ-left ℓₒ-left = _ , ℓᵢₒ-left , ℓᵢₒ , ℓ∅
-reorient {chan} ℓᵢₒ ℓᵢ-left ℓₒ-right = _ , ℓᵢₒ , ℓᵢ-left , ℓₒ-right
-reorient {chan} ℓᵢₒ ℓᵢ-right ℓₒ-left = _ , ℓₒᵢ , ℓₒ-right , ℓᵢ-left
-reorient {chan} ℓᵢₒ ℓᵢ-right ℓₒ-right = _ , ℓᵢₒ-right , ℓ∅ , ℓᵢₒ
-reorient {chan} ℓₒᵢ ℓₒ-left ℓᵢ-left = _ , ℓᵢₒ-left , ℓₒᵢ , ℓ∅
-reorient {chan} ℓₒᵢ ℓₒ-left ℓᵢ-right = _ , ℓₒᵢ , ℓₒ-left , ℓᵢ-right
-reorient {chan} ℓₒᵢ ℓₒ-right ℓᵢ-left = _ , ℓᵢₒ , ℓᵢ-right , ℓₒ-left
-reorient {chan} ℓₒᵢ ℓₒ-right ℓᵢ-right = _ , ℓᵢₒ-right , ℓ∅ , ℓₒᵢ
+reorient {linear} ℓ∅ ℓ∅ ℓ∅ = _ , ℓ∅ , ℓ∅ , ℓ∅
+reorient {linear} ℓᵢ-left spl2 ℓ∅ = _ , spl2 , +-idʳ _ , +-idʳ _
+reorient {linear} ℓᵢ-right ℓ∅ spl3 = _ , spl3 , +-idˡ _ , +-idˡ _
+reorient {linear} ℓₒ-left spl2 ℓ∅ = _ , spl2 , +-idʳ _ , +-idʳ _
+reorient {linear} ℓₒ-right ℓ∅ spl3 = _ , spl3 , +-idˡ _ , +-idˡ _
+reorient {linear} ℓᵢₒ-left spl2 ℓ∅ = _ , spl2 , +-idʳ _ , +-idʳ _
+reorient {linear} ℓᵢₒ-right ℓ∅ spl3 = _ , spl3 , +-idˡ _ , +-idˡ _
+reorient {linear} ℓᵢₒ ℓᵢ-left ℓₒ-left = _ , ℓᵢₒ-left , ℓᵢₒ , ℓ∅
+reorient {linear} ℓᵢₒ ℓᵢ-left ℓₒ-right = _ , ℓᵢₒ , ℓᵢ-left , ℓₒ-right
+reorient {linear} ℓᵢₒ ℓᵢ-right ℓₒ-left = _ , ℓₒᵢ , ℓₒ-right , ℓᵢ-left
+reorient {linear} ℓᵢₒ ℓᵢ-right ℓₒ-right = _ , ℓᵢₒ-right , ℓ∅ , ℓᵢₒ
+reorient {linear} ℓₒᵢ ℓₒ-left ℓᵢ-left = _ , ℓᵢₒ-left , ℓₒᵢ , ℓ∅
+reorient {linear} ℓₒᵢ ℓₒ-left ℓᵢ-right = _ , ℓₒᵢ , ℓₒ-left , ℓᵢ-right
+reorient {linear} ℓₒᵢ ℓₒ-right ℓᵢ-left = _ , ℓᵢₒ , ℓᵢ-right , ℓₒ-left
+reorient {linear} ℓₒᵢ ℓₒ-right ℓᵢ-right = _ , ℓᵢₒ-right , ℓ∅ , ℓₒᵢ
 reorient {type} prod-left prod-left pure = _ , prod-left , prod-left , pure
 reorient {type} prod-left prod-right pure = _ , prod-right , pure , prod-left
 reorient {type} prod-right pure prod-left = _ , prod-left , prod-right , pure
 reorient {type} prod-right pure prod-right = _ , prod-right , pure , prod-right
 reorient {type} pure pure pure = _ , pure , pure , pure
-reorient {type} (chan mid) (chan left) (chan right)
+reorient {type} unre unre unre = _ , unre , unre , unre
+reorient {type} (line mid) (line left) (line right)
   with _ , mid' , left' , right' ← reorient mid left right
-  = _ , chan mid' , chan left' , chan right'
+  = _ , line mid' , line left' , line right'
 reorient {ctx} [] [] [] = _ , [] , [] , []
 reorient {ctx} (x ∷ mid) (y ∷ left) (z ∷ right)
   with _ , x' , y' , z' ← reorient x y z
@@ -133,24 +134,34 @@ subst-proc spl term ins (end ws-null)
   with t-null , zs-null ← insert-null ins ws-null
   rewrite +-cancel spl zs-null
   = end (Null-Term t-null term)
-subst-proc spl term ins (par spl1 p q)
+subst-proc spl term ins (par spl1 p q) 
   with _ , spl' , lspl' , rspl' , lterm , rterm , insl , insr ← redistribute spl1 ins spl term
   = par spl' (subst-proc lspl' lterm insl p) (subst-proc rspl' rterm insr q)
-subst-proc spl term ins (new x p)
-  = new x (subst-proc (chan (+-idˡ x) ∷ spl) (Term-lift (chan (neutral-null x)) term) (there ins) p)
+subst-proc spl term ins (new (line t) p) = new (line t) (subst-proc (line (+-idˡ _) ∷ spl) (Term-lift (line ℓ∅) term) (there ins) p)
+subst-proc spl term ins (new (unre t) p) = new (unre t) (subst-proc (unre ∷ spl) (Term-lift unre term) (there ins) p)
 subst-proc spl term ins (rep ws-null p)
   with t-null , zs-null ← insert-null ins ws-null
   with refl ← +-cancel spl zs-null
   = rep (Null-Term t-null term) (subst-proc spl term ins p)
-subst-proc spl term ins (send {ms} {ls} {rs} spl-payload payload spl-channel channel p)
+subst-proc spl term ins (send-line {ms} {ls} {rs} spl-payload payload spl-channel channel p)
   with _ , spl-payload2 , lspl-term , spl-rest2 , term-l , term-rest , ins-payload , ins-rest ← redistribute spl-payload ins spl term
   with _ , spl-channel2 , spl-term-chan , spl-term-cont , term-channel , term-cont , ins-channel , ins-cont ← redistribute spl-channel ins-rest spl-rest2 term-rest
-  = send spl-payload2 (subst-term lspl-term term-l ins-payload payload)
+  = send-line spl-payload2 (subst-term lspl-term term-l ins-payload payload)
   spl-channel2 (subst-term spl-term-chan term-channel ins-channel channel)
   (subst-proc spl-term-cont term-cont ins-cont p)
-subst-proc spl term ins (recv {T = T} spl-channel channel cont)
+subst-proc spl term ins (send-unre {ms} {ls} {rs} spl-payload payload spl-channel channel p)
+  with _ , spl-payload2 , lspl-term , spl-rest2 , term-l , term-rest , ins-payload , ins-rest ← redistribute spl-payload ins spl term
+  with _ , spl-channel2 , spl-term-chan , spl-term-cont , term-channel , term-cont , ins-channel , ins-cont ← redistribute spl-channel ins-rest spl-rest2 term-rest
+  = send-unre spl-payload2 (subst-term lspl-term term-l ins-payload payload)
+  spl-channel2 (subst-term spl-term-chan term-channel ins-channel channel)
+  (subst-proc spl-term-cont term-cont ins-cont p)
+subst-proc spl term ins (recv-line {T = T} spl-channel channel cont)
   with _ , spl' , lspl' , rspl' , lterm , rterm , insl , insr ← redistribute spl-channel ins spl term
-  = recv spl' (subst-term lspl' lterm insl channel) λ t →
+  = recv-line spl' (subst-term lspl' lterm insl channel) λ t →
+    subst-proc (+-idˡ _ ∷ rspl') (Term-lift (neutral-null _) rterm) (there insr) (cont t)
+subst-proc spl term ins (recv-unre {T = T} spl-channel channel cont)
+  with _ , spl' , lspl' , rspl' , lterm , rterm , insl , insr ← redistribute spl-channel ins spl term
+  = recv-unre spl' (subst-term lspl' lterm insl channel) λ t →
     subst-proc (+-idˡ _ ∷ rspl') (Term-lift (neutral-null _) rterm) (there insr) (cont t)
 subst-proc spl term ins (letprod {A = A} {B} {a} {b} spl-prod prd p)
   with _ , spl' , lspl' , rspl' , lterm , rterm , insl , insr ← redistribute spl-prod ins spl term

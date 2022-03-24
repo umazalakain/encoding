@@ -60,19 +60,34 @@ exchange-proc ins1 ins2 (new x p) =
 exchange-proc ins1 ins2 (rep ys-null p) =
   let t-null , xs-null = insert-null ins1 ys-null in
   rep (null-insert ins2 t-null xs-null) (exchange-proc ins1 ins2 p)
-exchange-proc ins1 ins2 (send spl-payload payload spl-channel channel p) =
+exchange-proc ins1 ins2 (send-line spl-payload payload spl-channel channel p) =
   let _ , payload-tspl , payload-spl1 , payload-lins1 , payload-rins1 = extract ins1 spl-payload in
   let _ , payload-spl2 , payload-lins2 , payload-rins2 = imtract payload-spl1 payload-tspl ins2 in
   let _ , channel-tspl , channel-spl1 , channel-lins1 , channel-rins1 = extract payload-rins1 spl-channel in
   let _ , channel-spl2 , channel-lins2 , channel-rins2 = imtract channel-spl1 channel-tspl payload-rins2 in
-  send
+  send-line
     payload-spl2 (exchange-term payload-lins1 payload-lins2 payload)
     channel-spl2 (exchange-term channel-lins1 channel-lins2 channel)
     (exchange-proc channel-rins1 channel-rins2 p)
-exchange-proc ins1 ins2 (recv spl channel cont) =
+exchange-proc ins1 ins2 (recv-line spl channel cont) =
   let _ , tspl1 , spl1 , lins1 , rins1 = extract ins1 spl in
   let _ , spl2 , lins2 , rins2 = imtract spl1 tspl1 ins2 in
-  recv
+  recv-line
+    spl2 (exchange-term lins1 lins2 channel)
+    λ t → exchange-proc (there rins1) (there rins2) (cont t)
+exchange-proc ins1 ins2 (send-unre spl-payload payload spl-channel channel p) =
+  let _ , payload-tspl , payload-spl1 , payload-lins1 , payload-rins1 = extract ins1 spl-payload in
+  let _ , payload-spl2 , payload-lins2 , payload-rins2 = imtract payload-spl1 payload-tspl ins2 in
+  let _ , channel-tspl , channel-spl1 , channel-lins1 , channel-rins1 = extract payload-rins1 spl-channel in
+  let _ , channel-spl2 , channel-lins2 , channel-rins2 = imtract channel-spl1 channel-tspl payload-rins2 in
+  send-unre
+    payload-spl2 (exchange-term payload-lins1 payload-lins2 payload)
+    channel-spl2 (exchange-term channel-lins1 channel-lins2 channel)
+    (exchange-proc channel-rins1 channel-rins2 p)
+exchange-proc ins1 ins2 (recv-unre spl channel cont) =
+  let _ , tspl1 , spl1 , lins1 , rins1 = extract ins1 spl in
+  let _ , spl2 , lins2 , rins2 = imtract spl1 tspl1 ins2 in
+  recv-unre
     spl2 (exchange-term lins1 lins2 channel)
     λ t → exchange-proc (there rins1) (there rins2) (cont t)
 exchange-proc ins1 ins2 (letprod spl prd p) =

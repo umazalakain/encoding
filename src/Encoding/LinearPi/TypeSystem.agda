@@ -9,19 +9,21 @@ module LinearPi.TypeSystem where
 
 
 mutual
-  data Channel : Set₁ where
-    ℓ∅ : Channel
-    ℓᵢ ℓₒ ℓᵢₒ : Type → Channel
+  data Linear : Set₁ where
+    ℓ∅ : Linear
+    ℓᵢ ℓₒ ℓᵢₒ : Type → Linear
 
   data Type : Set₁ where
     pure : Set → Type
     prod : (T : Type) → (⟦ T ⟧ₜ → Type) → Type
-    chan : Channel → Type
+    line : Linear → Type
+    unre : Type → Type
 
   ⟦_⟧ₜ : Type → Set
   ⟦ pure V ⟧ₜ = V
   ⟦ prod A B ⟧ₜ = Σ ⟦ A ⟧ₜ (⟦_⟧ₜ ∘ B)
-  ⟦ chan _ ⟧ₜ = ⊤
+  ⟦ line _ ⟧ₜ = ⊤
+  ⟦ unre _ ⟧ₜ = ⊤
 
 TypedValue : Set₁
 TypedValue = Σ Type ⟦_⟧ₜ
@@ -31,10 +33,10 @@ Ctx = List TypedValue
 
 
 data Univ : Set where
-  chan type ctx : Univ
+  linear type ctx : Univ
 
 ⟦_⟧ᵤ : Univ → Set₁
-⟦ chan ⟧ᵤ = Channel
+⟦ linear ⟧ᵤ = Linear
 ⟦ type ⟧ᵤ = TypedValue
 ⟦ ctx ⟧ᵤ = Ctx
 
@@ -42,7 +44,7 @@ data Univ : Set where
 infixr 5 _∷_
 
 data _≔_+_ : ∀ {u} → ⟦ u ⟧ᵤ → ⟦ u ⟧ᵤ → ⟦ u ⟧ᵤ → Set where
-  ℓ∅ : ℓ∅ ≔ ℓ∅ + ℓ∅
+  ℓ∅        : ℓ∅ ≔ ℓ∅ + ℓ∅
   ℓᵢ-left   : ∀ {t} → ℓᵢ t ≔ ℓᵢ t + ℓ∅
   ℓᵢ-right  : ∀ {t} → ℓᵢ t ≔ ℓ∅ + ℓᵢ t
   ℓₒ-left   : ∀ {t} → ℓₒ t ≔ ℓₒ t + ℓ∅
@@ -54,7 +56,8 @@ data _≔_+_ : ∀ {u} → ⟦ u ⟧ᵤ → ⟦ u ⟧ᵤ → ⟦ u ⟧ᵤ → Se
   -- TODO: augment with unrestricted channel types
 
   pure : ∀ {A a} → (pure A , a) ≔ (pure A , a) + (pure A , a)
-  chan : ∀ {x y z} → x ≔ y + z → (chan x , tt) ≔ (chan y , tt) + (chan z , tt)
+  line : ∀ {x y z} → x ≔ y + z → (line x , tt) ≔ (line y , tt) + (line z , tt)
+  unre : ∀ {x} → (unre x , tt) ≔ (unre x , tt) + (unre x , tt)
   prod-left : ∀ {A B a b} → (prod A B , (a , b)) ≔ (prod A B , (a , b)) + (pure ⊤ , tt)
   prod-right : ∀ {A B a b} → (prod A B , (a , b)) ≔ (pure ⊤ , tt) + (prod A B , (a , b))
 
@@ -67,14 +70,15 @@ data _≔_+_ : ∀ {u} → ⟦ u ⟧ᵤ → ⟦ u ⟧ᵤ → ⟦ u ⟧ᵤ → Se
 
 
 data Null : ∀ {u} → ⟦ u ⟧ᵤ → Set₁ where
-  ℓ∅ : Null {u = chan} ℓ∅
+  ℓ∅   : Null {u = linear} ℓ∅
   pure : ∀ {A a} → Null (pure A , a)
-  chan : ∀ {x} → Null x → Null (chan x , tt)
-  [] : Null {u = ctx} []
-  _∷_ : ∀ {x xs}
-      → Null {u = type} x
-      → Null {u = ctx} xs
-      → Null {u = ctx} (x ∷ xs)
+  line : ∀ {x} → Null x → Null (line x , tt)
+  unre : ∀ {x} → Null (unre x , tt)
+  []   : Null {u = ctx} []
+  _∷_  : ∀ {x xs}
+       → Null {u = type} x
+       → Null {u = ctx} xs
+       → Null {u = ctx} (x ∷ xs)
 
 
 data _∋_ : Ctx → TypedValue → Set₁ where
@@ -97,6 +101,10 @@ data Term : Ctx → TypedValue → Set₁ where
        → Term xs (prod X Y , (x , y))
 
 
+data New : TypedValue → Set₁ where
+  line : ∀ t → New (line (ℓᵢₒ t) , tt)
+  unre : ∀ t → New (unre t , tt)
+
 data Process : Ctx → Set₁ where
   end : ∀ {xs}
       → Null xs → Process xs
@@ -105,27 +113,40 @@ data Process : Ctx → Set₁ where
       → Process ys
       → Process zs
       → Process xs
-  new : ∀ {xs} x
-      → Process ((chan x , tt) ∷ xs)
+  new : ∀ {x xs}
+      → New x
+      → Process (x ∷ xs)
       → Process xs
   rep : ∀ {xs}
       → Null xs
       → Process xs
       → Process xs
-  send : ∀ {xs ys zs vs ws T t}
-       → xs ≔ ys + zs
-       → Term ys (T , t)
-       → zs ≔ vs + ws
-       → Term vs (chan (ℓₒ T) , tt)
-       → Process ws
-       → Process xs
-  recv : ∀ {xs ys zs T}
-       → xs ≔ ys + zs
-       → Term ys (chan (ℓᵢ T) , tt)
-       → (∀ (t : ⟦ T ⟧ₜ ) → Process ((T , t) ∷ zs))
-       → Process xs
-  letprod : ∀ {xs ys zs A B a b}
-          → xs ≔ ys + zs
-          → Term ys (prod A B , (a , b))
-          → Process ((A , a) ∷ (B a , b) ∷ zs)
-          → Process xs
+  send-unre : ∀ {xs ys zs vs ws T t}
+            → xs ≔ ys + zs
+            → Term ys (T , t)
+            → zs ≔ vs + ws
+            → Term vs (unre T , tt)
+            → Process ws
+            → Process xs
+  recv-unre : ∀ {xs ys zs T}
+            → xs ≔ ys + zs
+            → Term ys (unre T , tt)
+            → (∀ (t : ⟦ T ⟧ₜ ) → Process ((T , t) ∷ zs))
+            → Process xs
+  send-line : ∀ {xs ys zs vs ws T t}
+            → xs ≔ ys + zs
+            → Term ys (T , t)
+            → zs ≔ vs + ws
+            → Term vs (line (ℓₒ T) , tt)
+            → Process ws
+            → Process xs
+  recv-line : ∀ {xs ys zs T}
+            → xs ≔ ys + zs
+            → Term ys (line (ℓᵢ T) , tt)
+            → (∀ (t : ⟦ T ⟧ₜ ) → Process ((T , t) ∷ zs))
+            → Process xs
+  letprod   : ∀ {xs ys zs A B a b}
+            → xs ≔ ys + zs
+            → Term ys (prod A B , (a , b))
+            → Process ((A , a) ∷ (B a , b) ∷ zs)
+            → Process xs

@@ -12,55 +12,60 @@ module LinearPi.Weakening where
 
 
 +-comm : ∀ {u} {x y z : ⟦ u ⟧ᵤ} → x ≔ y + z → x ≔ z + y
-+-comm {chan} ℓ∅ = ℓ∅
-+-comm {chan} ℓᵢ-left = ℓᵢ-right
-+-comm {chan} ℓᵢ-right = ℓᵢ-left
-+-comm {chan} ℓₒ-left = ℓₒ-right
-+-comm {chan} ℓₒ-right = ℓₒ-left
-+-comm {chan} ℓᵢₒ-left = ℓᵢₒ-right
-+-comm {chan} ℓᵢₒ-right = ℓᵢₒ-left
-+-comm {chan} ℓᵢₒ = ℓₒᵢ
-+-comm {chan} ℓₒᵢ = ℓᵢₒ
++-comm {linear} ℓ∅ = ℓ∅
++-comm {linear} ℓᵢ-left = ℓᵢ-right
++-comm {linear} ℓᵢ-right = ℓᵢ-left
++-comm {linear} ℓₒ-left = ℓₒ-right
++-comm {linear} ℓₒ-right = ℓₒ-left
++-comm {linear} ℓᵢₒ-left = ℓᵢₒ-right
++-comm {linear} ℓᵢₒ-right = ℓᵢₒ-left
++-comm {linear} ℓᵢₒ = ℓₒᵢ
++-comm {linear} ℓₒᵢ = ℓᵢₒ
 +-comm {type} pure = pure
-+-comm {type} (chan x) = chan (+-comm x)
++-comm {type} (line x) = line (+-comm x)
++-comm {type} unre = unre
 +-comm {type} prod-left = prod-right
 +-comm {type} prod-right = prod-left
 +-comm {ctx} [] = []
 +-comm {ctx} (x ∷ xs) = +-comm x ∷ +-comm xs
 
 neutral : ∀ {u} → ⟦ u ⟧ᵤ → ⟦ u ⟧ᵤ
-neutral {chan} x = ℓ∅
+neutral {linear} x = ℓ∅
+neutral {type} (unre x , _) = unre x , tt
 neutral {type} (pure A , a) = pure A , a
 neutral {type} (prod _ _ , _) = pure ⊤ , tt
-neutral {type} (chan x , _) = chan (neutral x) , _
+neutral {type} (line x , _) = line (neutral x) , _
 neutral {ctx} [] = []
 neutral {ctx} (x ∷ xs) = neutral x ∷ neutral xs
 
 neutral-idempotent : ∀ {u} (x : ⟦ u ⟧ᵤ) → neutral (neutral x) ≡ neutral x
-neutral-idempotent {chan} x = refl
+neutral-idempotent {linear} x = refl
+neutral-idempotent {type} (unre x , _) = refl
 neutral-idempotent {type} (pure _ , _) = refl
 neutral-idempotent {type} (prod _ _ , _) = refl
-neutral-idempotent {type} (chan _ , _) = refl
+neutral-idempotent {type} (line x , _) = refl
 neutral-idempotent {ctx} [] = refl
 neutral-idempotent {ctx} (x ∷ xs) = cong₂ _∷_ (neutral-idempotent x) (neutral-idempotent xs)
 
 neutral-null : ∀ {u} (x : ⟦ u ⟧ᵤ) → Null (neutral x)
-neutral-null {chan} x = ℓ∅
+neutral-null {linear} x = ℓ∅
+neutral-null {type} (unre _ , tt) = unre
 neutral-null {type} (pure _ , _) = pure
 neutral-null {type} (prod _ _ , _) = pure
-neutral-null {type} (chan x , _) = chan (neutral-null x)
+neutral-null {type} (line x , _) = line (neutral-null x)
 neutral-null {ctx} [] = []
 neutral-null {ctx} (x ∷ xs) = neutral-null x ∷ neutral-null xs
 
 
 +-idˡ : ∀ {u} (x : ⟦ u ⟧ᵤ) → x ≔ neutral x + x
-+-idˡ {chan} ℓ∅ = ℓ∅
-+-idˡ {chan} (ℓᵢ x) = ℓᵢ-right
-+-idˡ {chan} (ℓₒ x) = ℓₒ-right
-+-idˡ {chan} (ℓᵢₒ x) = ℓᵢₒ-right
++-idˡ {linear} ℓ∅ = ℓ∅
++-idˡ {linear} (ℓᵢ x) = ℓᵢ-right
++-idˡ {linear} (ℓₒ x) = ℓₒ-right
++-idˡ {linear} (ℓᵢₒ x) = ℓᵢₒ-right
++-idˡ {type} (unre x , _) = unre
 +-idˡ {type} (pure _ , _) = pure
 +-idˡ {type} (prod _ _ , _) = prod-right
-+-idˡ {type} (chan x , _) = chan (+-idˡ x)
++-idˡ {type} (line x , _) = line (+-idˡ x)
 +-idˡ {ctx} [] = []
 +-idˡ {ctx} (x ∷ xs) = +-idˡ x ∷ +-idˡ xs
 
@@ -76,7 +81,8 @@ neutral-null {ctx} (x ∷ xs) = neutral-null x ∷ neutral-null xs
 +-cancel prod-left null = refl
 +-cancel pure null = refl
 +-cancel [] null = refl
-+-cancel (chan x) (chan null) = cong (λ ● → chan ● , tt) (+-cancel x null)
++-cancel (line x) (line null) = cong (λ ● → line ● , tt) (+-cancel x null)
++-cancel unre null = refl
 +-cancel (spl ∷ spls) (null ∷ nulls) = cong₂ _∷_ (+-cancel spl null) (+-cancel spls nulls)
 
 null-unrestr : ∀ {u} {xs : ⟦ u ⟧ᵤ} → Null xs → xs ≔ xs + xs
@@ -133,19 +139,23 @@ Process-null-insert : ∀ {x n xs ys} → Null x → InsertAt n x xs ys → Proc
 Process-null-insert null ins (end x) = end (null-insert ins null x)
 Process-null-insert {x} null ins (par spl p q)
   with _ , spl1 , insl , insr ← imtract spl (+-idˡ x) ins
-  = par spl1 (Process-null-insert (neutral-null x) insl p) (Process-null-insert null insr q)
+  = par spl1  (Process-null-insert (neutral-null x) insl p) (Process-null-insert null insr q)
 Process-null-insert null ins (new x proc) = new x (Process-null-insert null (there ins) proc)
 Process-null-insert null ins (rep x proc) = rep (null-insert ins null x) (Process-null-insert null ins proc)
-Process-null-insert {x} null ins (send spl-payload payload spl-channel channel proc)
+Process-null-insert {x} null ins (send-unre spl-payload payload spl-channel channel proc)
   with _ , spl1 , insl , insr ← imtract spl-payload (+-idˡ x) ins
   with _ , spl2 , insrl , insrr ← imtract spl-channel (+-idˡ x) insr
-  = send
-    spl1 (Term-null-insert (neutral-null x) insl payload)
-    spl2 (Term-null-insert (neutral-null x) insrl channel)
-    (Process-null-insert null insrr proc)
-Process-null-insert {x} null ins (recv spl-channel channel cont)
+  = send-unre spl1 (Term-null-insert (neutral-null x) insl payload) spl2 (Term-null-insert (neutral-null x) insrl channel) (Process-null-insert null insrr proc)
+Process-null-insert {x} null ins (send-line spl-payload payload spl-channel channel proc)
+  with _ , spl1 , insl , insr ← imtract spl-payload (+-idˡ x) ins
+  with _ , spl2 , insrl , insrr ← imtract spl-channel (+-idˡ x) insr
+  = send-line spl1 (Term-null-insert (neutral-null x) insl payload) spl2 (Term-null-insert (neutral-null x) insrl channel) (Process-null-insert null insrr proc)
+Process-null-insert {x} null ins (recv-line spl-channel channel cont)
   with _ , spl1 , insl , insr ← imtract spl-channel (+-idˡ x) ins
-  = recv spl1 (Term-null-insert (neutral-null x) insl channel) (Process-null-insert null (there insr) ∘ cont)
+  = recv-line spl1 (Term-null-insert (neutral-null x) insl channel) (Process-null-insert null (there insr) ∘ cont)
+Process-null-insert {x} null ins (recv-unre spl-channel channel cont)
+  with _ , spl1 , insl , insr ← imtract spl-channel (+-idˡ x) ins
+  = recv-unre spl1 (Term-null-insert (neutral-null x) insl channel) (Process-null-insert null (there insr) ∘ cont)
 Process-null-insert {x} null ins (letprod spl-prd prd proc)
   with _ , spl1 , insl , insr ← imtract spl-prd (+-idˡ x) ins
   = letprod spl1 (Term-null-insert (neutral-null x) insl prd) (Process-null-insert null (there (there insr)) proc)
