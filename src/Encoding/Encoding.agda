@@ -11,7 +11,7 @@ module Encoding where
 module L where
   open import LinearPi.TypeSystem public
   open import LinearPi.Weakening public
-  -- open import LinearPi.Substitution public
+  open import LinearPi.Substitution public
   open import LinearPi.Exchange public
 
 
@@ -27,13 +27,11 @@ flip-chan L.ℓ∅ = L.ℓ∅
 flip-chan (L.ℓᵢ x) = L.ℓₒ x
 flip-chan (L.ℓₒ x) = L.ℓᵢ x
 flip-chan (L.ℓᵢₒ x) = L.ℓᵢₒ x
-flip-chan (L.# x) = L.# x
 
 mutual
   ⟦_⟧ₑ-type : S.Type → L.Type
   ⟦ S.pure x ⟧ₑ-type = L.pure x
   ⟦ S.sesh x ⟧ₑ-type = L.chan ⟦ x ⟧ₑ-session
-  ⟦ S.chan x ⟧ₑ-type = L.chan (L.# ⟦ x ⟧ₑ-type)
 
   ⟦_⟧ₑ-session : S.Session → L.Channel
   ⟦ S.end ⟧ₑ-session = L.ℓ∅
@@ -50,12 +48,10 @@ mutual
   decode : ∀ T → L.⟦ ⟦ T ⟧ₑ-type ⟧ₜ → S.⟦ T ⟧ₜ
   decode (S.pure A) x = x
   decode (S.sesh _) _ = tt
-  decode (S.chan _) _ = tt
 
   encode : ∀ T → S.⟦ T ⟧ₜ → L.⟦ ⟦ T ⟧ₑ-type ⟧ₜ
   encode (S.pure A) x = x
   encode (S.sesh _) _ = tt
-  encode (S.chan _) _ = tt
 
   encode-cont : (T : S.Type) (C : S.⟦ T ⟧ₜ → S.Session) → (L.⟦ ⟦ T ⟧ₑ-type ⟧ₜ → L.Type)
   encode-cont T C = L.chan ∘ ⟦_⟧ₑ-session ∘ C ∘ decode T
@@ -66,58 +62,37 @@ mutual
 decode-encode : ∀ T {t} → decode T (encode T t) ≡ t
 decode-encode (S.pure x) = refl
 decode-encode (S.sesh x) = refl
-decode-encode (S.chan x) = refl
 
 encode-decode : ∀ T {t} → encode T (decode T t) ≡ t
 encode-decode (S.pure x) = refl
 encode-decode (S.sesh x) = refl
-encode-decode (S.chan x) = refl
 
 ⟦_⟧-null-typedvalue : ∀ {x} → S.Null x → L.Null ⟦ x ⟧ₑ-typedvalue
 ⟦ S.pure ⟧-null-typedvalue = L.pure
-⟦ S.sesh-end ⟧-null-typedvalue = L.chan L.ℓ∅
-⟦ S.chan ⟧-null-typedvalue = L.chan L.#
+⟦ S.sesh S.end ⟧-null-typedvalue = L.chan L.ℓ∅
 
 ⟦_⟧-null : ∀ {xs : S.Ctx} → S.Null xs → L.Null ⟦ xs ⟧ₑ-ctx
 ⟦ S.[] ⟧-null = L.[]
 ⟦ n S.∷ ns ⟧-null = ⟦ n ⟧-null-typedvalue L.∷ ⟦ ns ⟧-null
 
-neutral-session : ∀ S → L.neutral ⟦ S ⟧ₑ-session ≡ L.ℓ∅
-neutral-session S.end = refl
-neutral-session (S.recv T x) = refl
-neutral-session (S.send T x) = refl
-neutral-session (S.cont T x) = refl
 
 ⟦_⟧-≔-+-typedvalue : ∀ {x y z} → x S.≔ y + z → ⟦ x ⟧ₑ-typedvalue L.≔ ⟦ y ⟧ₑ-typedvalue + ⟦ z ⟧ₑ-typedvalue
 ⟦ S.pure ⟧-≔-+-typedvalue = L.pure
-⟦ S.sesh-left {S} ⟧-≔-+-typedvalue
-  with spl ← L.+-idʳ ⟦ S ⟧ₑ-session
-  rewrite neutral-session S
-  = L.chan spl
-⟦ S.sesh-right {S} ⟧-≔-+-typedvalue
-  with spl ← L.+-idˡ ⟦ S ⟧ₑ-session
-  rewrite neutral-session S
-  = L.chan spl
-⟦ S.chan ⟧-≔-+-typedvalue = L.chan L.#
+⟦ S.sesh S.left ⟧-≔-+-typedvalue = L.chan (L.+-idʳ _)
+⟦ S.sesh S.right ⟧-≔-+-typedvalue = L.chan (L.+-idˡ _)
 
 ⟦_⟧-≔-+ : ∀ {xs ys zs} → xs S.≔ ys + zs → ⟦ xs ⟧ₑ-ctx L.≔ ⟦ ys ⟧ₑ-ctx + ⟦ zs ⟧ₑ-ctx
 ⟦ S.[] ⟧-≔-+ = L.[]
 ⟦ spl S.∷ spls ⟧-≔-+ = ⟦ spl ⟧-≔-+-typedvalue L.∷ ⟦ spls ⟧-≔-+
 
-∋ₜ-exhaust : ∀ {xs n zs T t} → xs S.∋ₜ S.at n (S.payload T t) ▹ zs
+∋ₜ-exhaust : ∀ {xs n zs T t} → xs S.∋ₜ S.at n (S.exhaust (T , t)) ▹ zs
            → Σ[ ys ∈ L.Ctx ] ⟦ xs ⟧ₑ-ctx L.≔ ys + ⟦ zs ⟧ₑ-ctx × ys L.∋ (⟦ T ⟧ₑ-type , encode T t)
-∋ₜ-exhaust (S.here (S.payload-pure _ _)) = _ , L.+-idʳ _ L.∷ L.+-idˡ _ , L.here (L.neutral-null _)
-∋ₜ-exhaust (S.here (S.payload-sesh {x}))
-  with spl ← L.+-idʳ ⟦ x ⟧ₑ-session
-  rewrite neutral-session x
-  = _ , L.chan spl L.∷ L.+-idˡ _ , L.here (L.neutral-null _)
-∋ₜ-exhaust (S.here S.payload-chan)
-  = _ , L.chan L.# L.∷ L.+-idˡ _ , L.here (L.neutral-null _)
+∋ₜ-exhaust (S.here S.exhaust-pure) = _ , L.+-idʳ _ L.∷ L.+-idˡ _ , L.here (L.neutral-null _)
+∋ₜ-exhaust (S.here S.exhaust-sesh) = _ , L.+-idʳ _ L.∷ L.+-idˡ _ , L.here (L.neutral-null _)
 ∋ₜ-exhaust (S.there x)
   with _ , spl , x' ← ∋ₜ-exhaust x
   = _ , L.+-idˡ _ L.∷ spl , L.there (L.neutral-null _) x'
 
-{-
 ∋ₜ-recv : ∀ {xs n zs T C}
         → xs S.∋ₜ S.at n (S.recv T C) ▹ zs
         → Σ[ ys ∈ L.Ctx ] ⟦ xs ⟧ₑ-ctx L.≔ ys + ⟦ zs ⟧ₑ-ctx × ys L.∋ (L.chan (L.ℓᵢ (L.prod ⟦ T ⟧ₑ-type (encode-cont T C))) , tt)
@@ -125,20 +100,17 @@ neutral-session (S.cont T x) = refl
 ∋ₜ-recv {xs = x ∷ _} (S.there n)
   with _ , spl , var ← ∋ₜ-recv n
   = _ , L.+-idˡ _ L.∷ spl , L.there (L.neutral-null _) var
-  -}
 
 
-∋ₜ-send : ∀ {ys n zs T t}
-        → ys S.∋ₜ S.at n (S.send T (decode T t)) ▹ zs
-        → Σ[ (xs , Cont) ∈ L.Ctx × (S.⟦ T ⟧ₜ → S.Session) ]
-          L.InsertAt n (L.chan (L.ℓₒ (L.prod ⟦ T ⟧ₑ-type (encode-cont-flip T Cont))) , tt) xs ⟦ ys ⟧ₑ-ctx
-        × L.InsertAt n (encode-cont T Cont t , tt) xs ⟦ zs ⟧ₑ-ctx
-∋ₜ-send (S.here (S.send-sesh {C = C})) = (_ , C) , L.here , L.here
-∋ₜ-send (S.here S.send-chan) = _ , {!L.here!} , {!!}
-∋ₜ-send (S.there x) = {!!}
+∋ₜ-send : ∀ {xs n zs T C}
+        → xs S.∋ₜ S.at n (S.send T C) ▹ zs
+        → Σ[ ys ∈ L.Ctx ] ⟦ xs ⟧ₑ-ctx L.≔ ys + ⟦ zs ⟧ₑ-ctx × ys L.∋ (L.chan (L.ℓₒ (L.prod ⟦ T ⟧ₑ-type (encode-cont-flip T C))) , tt)
+∋ₜ-send {xs = _ ∷ xs} (S.here (S.sesh S.send)) = _ , L.chan (L.+-idʳ _) L.∷ L.+-idˡ _ , L.here (L.neutral-null _)
+∋ₜ-send {xs = x ∷ _} (S.there n)
+  with _ , spl , var ← ∋ₜ-send n
+  = _ , L.+-idˡ _ L.∷ spl , L.there (L.neutral-null _) var
 
 
-{-
 ∋ₜ-cont : ∀ {n T t C zs ys}
         → ys S.∋ₜ S.at n (S.cont T (decode T t) C) ▹ zs
         → Σ[ xs ∈ L.Ctx ]
@@ -148,19 +120,16 @@ neutral-session (S.cont T x) = refl
 ∋ₜ-cont (S.there ins)
   with ! ins1 , ins2 ← ∋ₜ-cont ins
   = _ , L.there ins1 , L.there ins2
-  -}
 
 
 
 mutual
   ⟦_⟧ₚ : ∀ {Γ} → S.Process Γ → L.Process ⟦ Γ ⟧ₑ-ctx
   ⟦ S.end n ⟧ₚ = L.end ⟦ n ⟧-null
-  ⟦ S.par s p q ⟧ₚ = L.par (⟦ s ⟧-≔-+ L., L.⊇-refl _) ⟦ p ⟧ₚ ⟦ q ⟧ₚ
-  ⟦ S.new (S.chan t) p ⟧ₚ = L.new (L.# ⟦ t ⟧ₑ-type) (L.new (L.# ⟦ t ⟧ₑ-type) ⟦ p ⟧ₚ)
-  ⟦ S.new (S.sesh s) p ⟧ₚ = L.new ⟦ S.dual s ⟧ₑ-session (L.new ⟦ s ⟧ₑ-session ⟦ p ⟧ₚ)
+  ⟦ S.par s p q ⟧ₚ = L.par ⟦ s ⟧-≔-+ ⟦ p ⟧ₚ ⟦ q ⟧ₚ
+  ⟦ S.new S p ⟧ₚ = L.new ⟦ S.dual S ⟧ₑ-session (L.new ⟦ S ⟧ₑ-session ⟦ p ⟧ₚ)
   ⟦ S.rep n p ⟧ₚ = L.rep ⟦ n ⟧-null ⟦ p ⟧ₚ
-  ⟦ S.send {T = T} {t = t} v c p ⟧ₚ = {!!}
-  {-
+  ⟦ S.send {T = T} {t = t} {C = C} v s c p ⟧ₚ =
     let SC = ⟦ C t ⟧ₑ-session in
     let ! spv , tv = ∋ₜ-exhaust v in
     let ! spc , ch = ∋ₜ-send s in
@@ -194,4 +163,3 @@ mutual
     $ L.Process-null-insert (L.chan L.ℓ∅) (L.there (L.there L.here))
     $ L.exchange-proc (L.there ins2) (L.there L.here)
     $ ⟦ proc-cont ⟧ₚ
--}
