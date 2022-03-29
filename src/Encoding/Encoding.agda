@@ -97,6 +97,13 @@ exhaust (S.there x)
   with _ , spl , x' ← exhaust x
   = _ , L.+-idˡ _ L.∷ spl , L.there (L.neutral-null _) x'
 
+unre' : ∀ {xs n ys T}
+      → xs S.∋ₜ S.at n (S.is-type T) ▹ ys
+      → xs ≡ ys × Σ[ zs ∈ L.Ctx ] L.InsertAt n ⟦ T ⟧ₑ-typedvalue zs ⟦ xs ⟧ₑ-ctx
+unre' (S.here S.is-type) = refl , _ , L.here
+unre' (S.there x)
+  with eq , _ , ins ← unre' x
+  = cong (_ ∷_) eq , _ , L.there ins
 
 unre : ∀ {xs n zs T}
      → xs S.∋ₜ S.at n (S.is-type (S.unre T , tt)) ▹ zs
@@ -152,25 +159,31 @@ split-new S.end = _ , L.∅ , L.ℓ∅
 split-new (S.recv T C) = _ , L.ᵢₒ _ , subst (λ ● → L.ℓᵢₒ (L.prod ⟦ T ⟧ₑ-type (encode-cont T C)) L.≔ L.ℓᵢ (L.prod ⟦ T ⟧ₑ-type (encode-cont T C)) + L.ℓₒ (L.prod ⟦ T ⟧ₑ-type ●)) (EXTENSIONALITY (cong L.line ∘ sym ∘ dual-flip-inverse ∘ C ∘ decode T)) L.ℓᵢₒ
 split-new (S.send T C) = _ , L.ᵢₒ _ , subst (λ ● → L.ℓᵢₒ (L.prod ⟦ T ⟧ₑ-type (encode-cont-flip T C)) L.≔ L.ℓₒ (L.prod ⟦ T ⟧ₑ-type (encode-cont-flip T C)) + L.ℓᵢ (L.prod ⟦ T ⟧ₑ-type ●)) (EXTENSIONALITY (cong L.line ∘ sym ∘ dual-flip ∘ C ∘ decode T)) L.ℓₒᵢ
 
+insert-source-eq : ∀ {n t ys xs xs'} → L.InsertAt n t xs ys → L.InsertAt n t xs' ys → xs ≡ xs'
+insert-source-eq L.here L.here = refl
+insert-source-eq (L.there ins1) (L.there ins2) = cong (_ ∷_) (insert-source-eq ins1 ins2)
 
 mutual
   ⟦_⟧ₚ : ∀ {Γ} → S.Process Γ → L.Process ⟦ Γ ⟧ₑ-ctx
   ⟦ S.end n ⟧ₚ = L.end ⟦ n ⟧-null
   ⟦ S.par s p q ⟧ₚ = L.par ⟦ s ⟧-≔-+ ⟦ p ⟧ₚ ⟦ q ⟧ₚ
-  -- TODO: join channels
+  ⟦ S.rep n p ⟧ₚ = L.rep ⟦ n ⟧-null ⟦ p ⟧ₚ
+
+
+  ⟦ S.new (S.unre t) p ⟧ₚ = L.new (L.unre ⟦ t ⟧ₑ-type) (L.new (L.unre ⟦ t ⟧ₑ-type) ⟦ p ⟧ₚ)
   ⟦ S.new (S.sesh S) p ⟧ₚ =
     let _ , new , spl = split-new S in
     L.new new (L.subst-proc (L.line spl L.∷ L.+-idˡ _) (L.var (L.here (L.neutral-null _))) L.here ⟦ p ⟧ₚ)
-  ⟦ S.new (S.unre t) p ⟧ₚ = L.new (L.unre ⟦ t ⟧ₑ-type) (L.new (L.unre ⟦ t ⟧ₑ-type) ⟦ p ⟧ₚ)
-  ⟦ S.rep n p ⟧ₚ = L.rep ⟦ n ⟧-null ⟦ p ⟧ₚ
-  ⟦ S.send-sesh {T = T} {t = t} {C = C} v s p ⟧ₚ =
-    let
-      _ , new , spl-new = split-new (C t)
-      Γ , spv , tv = exhaust v
-      Δ , ch , cont = send-sesh s
-      (Θ , _) , spl' , ch' , ins' = insert-+-var ch
-    in
-    L.new new
+
+
+  ⟦ S.send-sesh {T = T} {t = t} {C = C} v s p ⟧ₚ
+    with _ , new , spl-new ← split-new (C t)
+    with Γ , spv , tv ← exhaust v
+    with Δ , ch , cont ← send-sesh s
+    with (Θ , _) , spl' , ch' , ins' ← insert-+-var ch
+    rewrite decode-encode T {t}
+    rewrite EXTENSIONALITY {B = λ ● → L.Type} (cong L.line ∘ sym ∘ dual-flip ∘ C ∘ decode T)
+    = L.new new
     $ L.send-line {T = L.prod ⟦ T ⟧ₑ-type λ x → L.line ⟦ S.dual (C (decode T x)) ⟧ₑ-session}
       (L.line (L.+-comm spl-new) L.∷ spv)
       (L.pair
@@ -178,27 +191,30 @@ mutual
         (L.var (L.there (L.line L.ℓ∅) tv))
         (L.var (subst (λ ● → (_ ∷ L.neutral Γ) L.∋ (L.line ⟦ S.dual (C ●) ⟧ₑ-session , tt)) (sym (decode-encode T)) (L.here (L.neutral-null _)))))
       (L.+-idˡ _ L.∷ spl')
-      (L.var (L.there (L.line L.ℓ∅) (subst (λ ● → Θ L.∋ (L.line (L.ℓₒ (L.prod ⟦ T ⟧ₑ-type ●)) , tt)) (EXTENSIONALITY (cong L.line ∘ sym ∘ dual-flip ∘ C ∘ decode T)) ch')))
+      (L.var (L.there (L.line L.ℓ∅) ch'))
     $ L.Process-null-insert (L.line L.ℓ∅) (L.there ins')
-    $ L.exchange-proc cont (subst (λ ● → L.InsertAt _ (L.line ⟦ C ● ⟧ₑ-session , tt) Δ (_ ∷ Δ)) (sym (decode-encode T)) L.here)
+    $ L.exchange-proc cont L.here
     $ ⟦ p ⟧ₚ
 
   ⟦ S.recv-sesh {ys = ys} {T = T} {C = C} s p ⟧ₚ
-    =
-    {!!}
-  {-
-    let ! spl , channel = ∋ₜ-recv s in
-    L.recv spl (L.var channel) λ (t , tt) →
-    let var-cont , proc-cont = p (decode T t) in
-    let ! ins1 , ins2 = ∋ₜ-cont var-cont in
-    L.letprod (L.+-idʳ _ L.∷ L.+-idˡ _) (L.var (L.here (L.neutral-null _)))
-    $ L.Process-null-insert L.pure (L.there (L.there L.here))
-    $ subst (λ ● → L.Process ((⟦ T ⟧ₑ-type , ●) ∷ (encode-cont T C t , tt) ∷ ⟦ ys ⟧ₑ-ctx)) (encode-decode T)
-    $ L.exchange-proc (L.there (L.there L.here)) (L.there (L.there ins1))
-    $ L.Process-null-insert (L.chan L.ℓ∅) (L.there (L.there L.here))
-    $ L.exchange-proc (L.there ins2) (L.there L.here)
-    $ ⟦ proc-cont ⟧ₚ
-    -}
+    with eq , _ , ins ← unre' s
+    with (_ , ctx) , spl , ni , insnull ← insert-+-var ins
+    rewrite eq
+    = L.recv-line spl (L.var ni) λ (t , tt) → continuation t
+
+    where
+      continuation : (t : L.⟦ ⟦ T ⟧ₑ-type ⟧ₜ) → L.Process ((L.prod ⟦ T ⟧ₑ-type (L.line ∘ ⟦_⟧ₑ-session ∘ C ∘ decode T) , (t , tt)) ∷ ctx)
+      continuation t
+        with recvc , proc-cont ← p (decode T t)
+        with Δ , insch , inscont ← recv-sesh recvc
+        = L.letprod (L.+-idʳ _ L.∷ L.+-idˡ _) (L.var (L.here (L.neutral-null _)))
+        $ L.Process-null-insert L.pure (L.there (L.there L.here))
+        $ subst (λ ● → L.Process ((⟦ T ⟧ₑ-type , ●) ∷ (encode-cont T C t , tt) ∷ _)) (encode-decode T)
+        $ L.exchange-proc (L.there (L.there L.here)) (L.there (L.there insnull))
+        $ subst (λ ● → L.Process (_ ∷ _ ∷ _ ∷ ●)) (insert-source-eq insch ins)
+        $ L.Process-null-insert (L.line L.ℓ∅) (L.there (L.there L.here))
+        $ L.exchange-proc (L.there inscont) (L.there L.here)
+        $ ⟦ proc-cont ⟧ₚ
 
   ⟦ S.send-unre {T = T} {t = t} v c p ⟧ₚ =
     let

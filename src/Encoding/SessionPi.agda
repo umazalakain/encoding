@@ -99,6 +99,7 @@ data New : TypedValue → TypedValue → Set₁ where
   unre : ∀ t → New (unre t , tt) (unre t , tt)
 
 data Process : Ctx → Set₁ where
+
   end : ∀ {xs} → Null xs → Process xs
   par : ∀ {xs ys zs}
       → xs ≔ ys + zs
@@ -110,6 +111,7 @@ data Process : Ctx → Set₁ where
       → Process (x ∷ y ∷ xs)
       → Process xs
   rep : ∀ {xs} → Null xs → Process xs → Process xs
+
   send-sesh : ∀ {xs n ys m zs T t C}
             → xs ∋ₜ at n (exhaust (T , t)) ▹ ys
             → ys ∋ₜ at m (send-sesh T t C) ▹ zs
@@ -117,7 +119,7 @@ data Process : Ctx → Set₁ where
             → Process xs
   recv-sesh : ∀ {xs n ys zs T C}
             → xs ∋ₜ at n (is-type (sesh (recv T C) , tt)) ▹ ys
-            → ((t : ⟦ T ⟧ₜ) → xs ∋ₜ at n (recv-sesh T t C) ▹ zs × Process ((T , t) ∷ zs))
+            → ((t : ⟦ T ⟧ₜ) → ys ∋ₜ at n (recv-sesh T t C) ▹ zs × Process ((T , t) ∷ zs))
             → Process xs
   send-unre : ∀ {xs n ys m zs T t}
             → xs ∋ₜ at n (exhaust (T , t)) ▹ ys
