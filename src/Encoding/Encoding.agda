@@ -97,21 +97,13 @@ exhaust (S.there x)
   with _ , spl , x' ← exhaust x
   = _ , L.+-idˡ _ L.∷ spl , L.there (L.neutral-null _) x'
 
-unre' : ∀ {xs n ys T}
+unre : ∀ {xs n ys T}
       → xs S.∋ₜ S.at n (S.is-type T) ▹ ys
       → xs ≡ ys × Σ[ zs ∈ L.Ctx ] L.InsertAt n ⟦ T ⟧ₑ-typedvalue zs ⟦ xs ⟧ₑ-ctx
-unre' (S.here S.is-type) = refl , _ , L.here
-unre' (S.there x)
-  with eq , _ , ins ← unre' x
-  = cong (_ ∷_) eq , _ , L.there ins
-
-unre : ∀ {xs n zs T}
-     → xs S.∋ₜ S.at n (S.is-type (S.unre T , tt)) ▹ zs
-     → Σ[ ys ∈ L.Ctx ] ⟦ xs ⟧ₑ-ctx L.≔ ys + ⟦ zs ⟧ₑ-ctx × ys L.∋ (⟦ S.unre T ⟧ₑ-type , tt)
-unre (S.here S.is-type) = _ , L.unre L.∷ L.+-idˡ _ , L.here (L.neutral-null _)
+unre (S.here S.is-type) = refl , _ , L.here
 unre (S.there x)
-  with ! spl , ins ← unre x
-  = _ , (L.+-idˡ _ L.∷ spl) , L.there (L.neutral-null _) ins
+  with eq , _ , ins ← unre x
+  = cong (_ ∷_) eq , _ , L.there ins
 
 
 send-sesh : ∀ {n T t C zs ys}
@@ -197,11 +189,10 @@ mutual
     $ ⟦ p ⟧ₚ
 
   ⟦ S.recv-sesh {ys = ys} {T = T} {C = C} s p ⟧ₚ
-    with eq , _ , ins ← unre' s
+    with eq , _ , ins ← unre s
     with (_ , ctx) , spl , ni , insnull ← insert-+-var ins
     rewrite eq
     = L.recv-line spl (L.var ni) λ (t , tt) → continuation t
-
     where
       continuation : (t : L.⟦ ⟦ T ⟧ₑ-type ⟧ₜ) → L.Process ((L.prod ⟦ T ⟧ₑ-type (L.line ∘ ⟦_⟧ₑ-session ∘ C ∘ decode T) , (t , tt)) ∷ ctx)
       continuation t
@@ -216,17 +207,20 @@ mutual
         $ L.exchange-proc (L.there inscont) (L.there L.here)
         $ ⟦ proc-cont ⟧ₚ
 
-  ⟦ S.send-unre {T = T} {t = t} v c p ⟧ₚ =
-    let
-      ! spv , tv = exhaust v
-      ! spc , ch = unre c
-    in
-    L.send-unre spv (L.var tv) spc (L.var ch) ⟦ p ⟧ₚ
+  ⟦ S.send-unre {T = T} {t = t} v c p ⟧ₚ
+    with ! spv , tv ← exhaust v
+    with eq , _ , insch ← unre c
+    with (_ , ctx) , splch , nich , inschnull ← insert-+-var insch
+    rewrite eq
+    = L.send-unre spv (L.var tv) splch (L.var nich)
+    $ L.exchange-proc insch inschnull
+    $ ⟦ p ⟧ₚ
 
-  ⟦ S.recv-unre {ys = ys} {T = T} c p ⟧ₚ =
-    let
-      ! spc , ch = unre c
-    in
-    L.recv-unre spc (L.var ch) λ t →
-    subst (λ ● → L.Process ((⟦ T ⟧ₑ-type , ●) ∷ ⟦ ys ⟧ₑ-ctx)) (encode-decode T)
-    ⟦ p (decode T t) ⟧ₚ
+  ⟦ S.recv-unre {ys = ys} {T = T} c p ⟧ₚ
+    with eq , _ , insch ← unre c
+    with (_ , ctx) , splch , nich , inschnull ← insert-+-var insch
+    rewrite eq
+    = L.recv-unre splch (L.var nich) λ t
+    → subst (λ ● → L.Process ((⟦ T ⟧ₑ-type , ●) ∷ ctx)) (encode-decode T)
+    $ L.exchange-proc (L.there insch) (L.there inschnull)
+    $ ⟦ p (decode T t) ⟧ₚ
