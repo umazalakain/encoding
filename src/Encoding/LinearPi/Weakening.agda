@@ -47,31 +47,31 @@ neutral-idempotent {type} (line x , _) = refl
 neutral-idempotent {ctx} [] = refl
 neutral-idempotent {ctx} (x ∷ xs) = cong₂ _∷_ (neutral-idempotent x) (neutral-idempotent xs)
 
-neutral-null : ∀ {u} (x : ⟦ u ⟧ᵤ) → Null (neutral x)
-neutral-null {linear} x = ℓ∅
-neutral-null {type} (unre _ , tt) = unre
-neutral-null {type} (pure _ , _) = pure
-neutral-null {type} (prod _ _ , _) = pure
-neutral-null {type} (line x , _) = line (neutral-null x)
-neutral-null {ctx} [] = []
-neutral-null {ctx} (x ∷ xs) = neutral-null x ∷ neutral-null xs
+neutral-null : ∀ {u} {x : ⟦ u ⟧ᵤ} → Null (neutral x)
+neutral-null {linear} = ℓ∅
+neutral-null {type} {unre _ , tt} = unre
+neutral-null {type} {pure _ , _} = pure
+neutral-null {type} {prod _ _ , _} = pure
+neutral-null {type} {line x , _} = line (neutral-null {linear} {x})
+neutral-null {ctx} {[]} = []
+neutral-null {ctx} {x ∷ xs} = neutral-null ∷ neutral-null
 
 
-+-idˡ : ∀ {u} (x : ⟦ u ⟧ᵤ) → x ≔ neutral x + x
-+-idˡ {linear} ℓ∅ = ℓ∅
-+-idˡ {linear} (ℓᵢ x) = ℓᵢ-right
-+-idˡ {linear} (ℓₒ x) = ℓₒ-right
-+-idˡ {linear} (ℓᵢₒ x) = ℓᵢₒ-right
-+-idˡ {type} (unre x , _) = unre
-+-idˡ {type} (pure _ , _) = pure
-+-idˡ {type} (prod _ _ , _) = prod-right
-+-idˡ {type} (line x , _) = line (+-idˡ x)
-+-idˡ {ctx} [] = []
-+-idˡ {ctx} (x ∷ xs) = +-idˡ x ∷ +-idˡ xs
+go-right : ∀ {u} {x : ⟦ u ⟧ᵤ} → x ≔ neutral x + x
+go-right {linear} {ℓ∅} = ℓ∅
+go-right {linear} {ℓᵢ x} = ℓᵢ-right
+go-right {linear} {ℓₒ x} = ℓₒ-right
+go-right {linear} {ℓᵢₒ x} = ℓᵢₒ-right
+go-right {type} {unre x , _} = unre
+go-right {type} {pure _ , _} = pure
+go-right {type} {prod _ _ , _} = prod-right
+go-right {type} {line x , _} = line go-right
+go-right {ctx} {[]} = []
+go-right {ctx} {x ∷ xs} = go-right ∷ go-right
 
 
-+-idʳ : ∀ {u} (x : ⟦ u ⟧ᵤ) → x ≔ x + neutral x
-+-idʳ x = +-comm (+-idˡ x)
+go-left : ∀ {u} {x : ⟦ u ⟧ᵤ} → x ≔ x + neutral x
+go-left = +-comm go-right
 
 +-cancel : ∀ {u} {a b c : ⟦ u ⟧ᵤ} → a ≔ b + c → Null c → a ≡ b
 +-cancel ℓ∅ null = refl
@@ -87,8 +87,8 @@ neutral-null {ctx} (x ∷ xs) = neutral-null x ∷ neutral-null xs
 
 null-unrestr : ∀ {u} {xs : ⟦ u ⟧ᵤ} → Null xs → xs ≔ xs + xs
 null-unrestr {xs = xs} null
-  rewrite +-cancel (+-idˡ xs) null
-  with spl ← +-idˡ (neutral xs)
+  rewrite +-cancel (go-right {x = xs}) null
+  with spl ← go-right {x = neutral xs}
   rewrite neutral-idempotent xs = spl
 
 Null-∋ : ∀ {t xs} → Null t → xs ∋ t → Null xs
@@ -132,33 +132,33 @@ Term-null-insert : ∀ {x n xs ys t} → Null x → InsertAt n x xs ys → Term 
 Term-null-insert null ins (var x) = var (Var-null-insert null ins x)
 Term-null-insert null ins (pure a x) = pure a (null-insert ins null x)
 Term-null-insert {x} null ins (pair spl l r)
-  with _ , spl1 , insl , insr ← imtract spl (+-idˡ x) ins
-  = pair spl1 (Term-null-insert (neutral-null x) insl l) (Term-null-insert null insr r)
+  with _ , spl1 , insl , insr ← imtract spl go-right ins
+  = pair spl1 (Term-null-insert neutral-null insl l) (Term-null-insert null insr r)
 
 Process-null-insert : ∀ {x n xs ys} → Null x → InsertAt n x xs ys → Process xs → Process ys
 Process-null-insert null ins (end x) = end (null-insert ins null x)
 Process-null-insert {x} null ins (par spl p q)
-  with _ , spl1 , insl , insr ← imtract spl (+-idˡ x) ins
-  = par spl1  (Process-null-insert (neutral-null x) insl p) (Process-null-insert null insr q)
+  with _ , spl1 , insl , insr ← imtract spl go-right ins
+  = par spl1  (Process-null-insert neutral-null insl p) (Process-null-insert null insr q)
 Process-null-insert null ins (new x proc) = new x (Process-null-insert null (there ins) proc)
 Process-null-insert null ins (rep x proc) = rep (null-insert ins null x) (Process-null-insert null ins proc)
 Process-null-insert {x} null ins (send-unre spl-payload payload spl-channel channel proc)
-  with _ , spl1 , insl , insr ← imtract spl-payload (+-idˡ x) ins
-  with _ , spl2 , insrl , insrr ← imtract spl-channel (+-idˡ x) insr
-  = send-unre spl1 (Term-null-insert (neutral-null x) insl payload) spl2 (Term-null-insert (neutral-null x) insrl channel) (Process-null-insert null insrr proc)
+  with _ , spl1 , insl , insr ← imtract spl-payload go-right ins
+  with _ , spl2 , insrl , insrr ← imtract spl-channel go-right insr
+  = send-unre spl1 (Term-null-insert neutral-null insl payload) spl2 (Term-null-insert neutral-null insrl channel) (Process-null-insert null insrr proc)
 Process-null-insert {x} null ins (send-line spl-payload payload spl-channel channel proc)
-  with _ , spl1 , insl , insr ← imtract spl-payload (+-idˡ x) ins
-  with _ , spl2 , insrl , insrr ← imtract spl-channel (+-idˡ x) insr
-  = send-line spl1 (Term-null-insert (neutral-null x) insl payload) spl2 (Term-null-insert (neutral-null x) insrl channel) (Process-null-insert null insrr proc)
+  with _ , spl1 , insl , insr ← imtract spl-payload go-right ins
+  with _ , spl2 , insrl , insrr ← imtract spl-channel go-right insr
+  = send-line spl1 (Term-null-insert neutral-null insl payload) spl2 (Term-null-insert neutral-null insrl channel) (Process-null-insert null insrr proc)
 Process-null-insert {x} null ins (recv-line spl-channel channel cont)
-  with _ , spl1 , insl , insr ← imtract spl-channel (+-idˡ x) ins
-  = recv-line spl1 (Term-null-insert (neutral-null x) insl channel) (Process-null-insert null (there insr) ∘ cont)
+  with _ , spl1 , insl , insr ← imtract spl-channel go-right ins
+  = recv-line spl1 (Term-null-insert neutral-null insl channel) (Process-null-insert null (there insr) ∘ cont)
 Process-null-insert {x} null ins (recv-unre spl-channel channel cont)
-  with _ , spl1 , insl , insr ← imtract spl-channel (+-idˡ x) ins
-  = recv-unre spl1 (Term-null-insert (neutral-null x) insl channel) (Process-null-insert null (there insr) ∘ cont)
+  with _ , spl1 , insl , insr ← imtract spl-channel go-right ins
+  = recv-unre spl1 (Term-null-insert neutral-null insl channel) (Process-null-insert null (there insr) ∘ cont)
 Process-null-insert {x} null ins (letprod spl-prd prd proc)
-  with _ , spl1 , insl , insr ← imtract spl-prd (+-idˡ x) ins
-  = letprod spl1 (Term-null-insert (neutral-null x) insl prd) (Process-null-insert null (there (there insr)) proc)
+  with _ , spl1 , insl , insr ← imtract spl-prd go-right ins
+  = letprod spl1 (Term-null-insert neutral-null insl prd) (Process-null-insert null (there (there insr)) proc)
 
 
 Term-lift : ∀ {x xs t} → Null x → Term xs t → Term (x ∷ xs) t

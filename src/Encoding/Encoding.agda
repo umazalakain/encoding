@@ -80,8 +80,8 @@ encode-decode (S.unre x) = refl
 
 ⟦_⟧-≔-+-typedvalue : ∀ {x y z} → x S.≔ y + z → ⟦ x ⟧ₑ-typedvalue L.≔ ⟦ y ⟧ₑ-typedvalue + ⟦ z ⟧ₑ-typedvalue
 ⟦ S.pure ⟧-≔-+-typedvalue = L.pure
-⟦ S.sesh S.left ⟧-≔-+-typedvalue = L.line (L.+-idʳ _)
-⟦ S.sesh S.right ⟧-≔-+-typedvalue = L.line (L.+-idˡ _)
+⟦ S.sesh S.left ⟧-≔-+-typedvalue = L.line L.go-left
+⟦ S.sesh S.right ⟧-≔-+-typedvalue = L.line L.go-right
 ⟦ S.unre ⟧-≔-+-typedvalue = L.unre
 
 ⟦_⟧-≔-+ : ∀ {xs ys zs} → xs S.≔ ys + zs → ⟦ xs ⟧ₑ-ctx L.≔ ⟦ ys ⟧ₑ-ctx + ⟦ zs ⟧ₑ-ctx
@@ -90,12 +90,12 @@ encode-decode (S.unre x) = refl
 
 exhaust : ∀ {xs n zs T t} → xs S.∋ₜ S.at n (S.exhaust (T , t)) ▹ zs
         → Σ[ ys ∈ L.Ctx ] ⟦ xs ⟧ₑ-ctx L.≔ ys + ⟦ zs ⟧ₑ-ctx × ys L.∋ (⟦ T ⟧ₑ-type , encode T t)
-exhaust (S.here S.exhaust-pure) = _ , L.+-idʳ _ L.∷ L.+-idˡ _ , L.here (L.neutral-null _)
-exhaust (S.here S.exhaust-sesh) = _ , L.+-idʳ _ L.∷ L.+-idˡ _ , L.here (L.neutral-null _)
-exhaust (S.here S.exhaust-unre) = _ , L.unre L.∷ L.+-idˡ _ , L.here (L.neutral-null _)
+exhaust (S.here S.exhaust-pure) = _ , L.go-left L.∷ L.go-right , L.here L.neutral-null
+exhaust (S.here S.exhaust-sesh) = _ , L.go-left L.∷ L.go-right , L.here L.neutral-null
+exhaust (S.here S.exhaust-unre) = _ , L.unre L.∷ L.go-right , L.here L.neutral-null
 exhaust (S.there x)
   with _ , spl , x' ← exhaust x
-  = _ , L.+-idˡ _ L.∷ spl , L.there (L.neutral-null _) x'
+  = _ , L.go-right L.∷ spl , L.there L.neutral-null x'
 
 unre : ∀ {xs n ys T}
       → xs S.∋ₜ S.at n (S.is-type T) ▹ ys
@@ -128,8 +128,8 @@ recv-sesh (S.there x)
 
 
 insert-+-var : ∀ {n t xs ys} → L.InsertAt n t xs ys → Σ[ (rs , zs) ∈ L.Ctx × L.Ctx ] ys L.≔ rs + zs × rs L.∋ t × L.InsertAt n (L.neutral t) xs zs
-insert-+-var L.here = _ , L.+-idʳ _ L.∷ L.+-idˡ _ , L.here (L.neutral-null _) , L.here
-insert-+-var (L.there x) = let _ , spl , vr , ins = insert-+-var x in _ , L.+-idˡ _ L.∷ spl , L.there (L.neutral-null _) vr , L.there ins
+insert-+-var L.here = _ , L.go-left L.∷ L.go-right , L.here L.neutral-null , L.here
+insert-+-var (L.there x) = let _ , spl , vr , ins = insert-+-var x in _ , L.go-right L.∷ spl , L.there L.neutral-null vr , L.there ins
 
 open import Axiom.Extensionality.Propositional using (Extensionality)
 import Level
@@ -165,7 +165,7 @@ mutual
   ⟦ S.new (S.unre t) p ⟧ₚ = L.new (L.unre ⟦ t ⟧ₑ-type) (L.new (L.unre ⟦ t ⟧ₑ-type) ⟦ p ⟧ₚ)
   ⟦ S.new (S.sesh S) p ⟧ₚ =
     let _ , new , spl = split-new S in
-    L.new new (L.subst-proc (L.line spl L.∷ L.+-idˡ _) (L.var (L.here (L.neutral-null _))) L.here ⟦ p ⟧ₚ)
+    L.new new (L.subst-proc (L.line spl L.∷ L.go-right) (L.var (L.here L.neutral-null)) L.here ⟦ p ⟧ₚ)
 
 
   ⟦ S.send-sesh {T = T} {t = t} {C = C} v s p ⟧ₚ
@@ -179,10 +179,10 @@ mutual
     $ L.send-line {T = L.prod ⟦ T ⟧ₑ-type λ x → L.line ⟦ S.dual (C (decode T x)) ⟧ₑ-session}
       (L.line (L.+-comm spl-new) L.∷ spv)
       (L.pair
-        (L.+-idˡ _ L.∷ L.+-idʳ _)
+        (L.go-right L.∷ L.go-left)
         (L.var (L.there (L.line L.ℓ∅) tv))
-        (L.var (subst (λ ● → (_ ∷ L.neutral Γ) L.∋ (L.line ⟦ S.dual (C ●) ⟧ₑ-session , tt)) (sym (decode-encode T)) (L.here (L.neutral-null _)))))
-      (L.+-idˡ _ L.∷ spl')
+        (L.var (subst (λ ● → (_ ∷ L.neutral Γ) L.∋ (L.line ⟦ S.dual (C ●) ⟧ₑ-session , tt)) (sym (decode-encode T)) (L.here L.neutral-null))))
+      (L.go-right L.∷ spl')
       (L.var (L.there (L.line L.ℓ∅) ch'))
     $ L.Process-null-insert (L.line L.ℓ∅) (L.there ins')
     $ L.exchange-proc cont L.here
@@ -198,7 +198,7 @@ mutual
       continuation t
         with recvc , proc-cont ← p (decode T t)
         with Δ , insch , inscont ← recv-sesh recvc
-        = L.letprod (L.+-idʳ _ L.∷ L.+-idˡ _) (L.var (L.here (L.neutral-null _)))
+        = L.letprod (L.go-left L.∷ L.go-right) (L.var (L.here L.neutral-null))
         $ L.Process-null-insert L.pure (L.there (L.there L.here))
         $ subst (λ ● → L.Process ((⟦ T ⟧ₑ-type , ●) ∷ (encode-cont T C t , tt) ∷ _)) (encode-decode T)
         $ L.exchange-proc (L.there (L.there L.here)) (L.there (L.there insnull))
